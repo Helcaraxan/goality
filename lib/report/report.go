@@ -13,6 +13,7 @@ import (
 
 // View represents aggregated lint results.
 type View struct {
+	Path     string
 	SubViews map[string]*SubView
 }
 
@@ -97,7 +98,10 @@ func (p *Project) GenerateView(opts ...*ViewOpts) *View {
 		subViews = append(subViews, p.SubView(path))
 	}
 
-	view := &View{SubViews: map[string]*SubView{}}
+	view := &View{
+		Path:     p.Path,
+		SubViews: map[string]*SubView{},
+	}
 	for _, subView := range subViews {
 		view.SubViews[subView.Path] = subView
 	}

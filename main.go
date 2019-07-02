@@ -1,12 +1,12 @@
 package main
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
+	"github.com/Helcaraxan/goality/lib/printer"
 	"github.com/Helcaraxan/goality/lib/report"
 )
 
@@ -23,15 +23,13 @@ func main() {
 			}
 		},
 		RunE: func(_ *cobra.Command, args []string) error {
-			project, err := report.Parse(logger, args[0])
+			project, err := report.Parse(logger, args[0], report.WithConfig(".golangci.yaml"))
 			if err != nil {
 				return err
 			}
 
-			for _, subView := range project.GenerateView().SubViews {
-				fmt.Println(subView)
-			}
-			return nil
+			view := project.GenerateView(report.WithDepth(1))
+			return printer.Print(os.Stdout, view)
 		},
 	}
 

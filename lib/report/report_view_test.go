@@ -172,52 +172,58 @@ func Test_Views(t *testing.T) {
 	// Generate a path-specific view.
 	view = project.GenerateView(WithPaths("foo/dir", "bar/file.go"))
 	require.Len(t, view.SubViews, 2)
-	require.Equal(t, &View{SubViews: map[string]*SubView{
-		"bar/file.go": {
-			Path:      "bar/file.go",
-			LineCount: 4,
-			Issues: map[string][]*result.Issue{
-				"unused": {barUnusedIssue},
+	require.Equal(t, &View{
+		Path: project.Path,
+		SubViews: map[string]*SubView{
+			"bar/file.go": {
+				Path:      "bar/file.go",
+				LineCount: 4,
+				Issues: map[string][]*result.Issue{
+					"unused": {barUnusedIssue},
+				},
+			},
+			"foo/dir/...": {
+				Path:      "foo/dir/...",
+				LineCount: 11,
+				Issues: map[string][]*result.Issue{
+					"govet":  {fooDirGoVetIssue},
+					"unused": {fooDirUnusedIssue},
+				},
+				recursive: true,
 			},
 		},
-		"foo/dir/...": {
-			Path:      "foo/dir/...",
-			LineCount: 11,
-			Issues: map[string][]*result.Issue{
-				"govet":  {fooDirGoVetIssue},
-				"unused": {fooDirUnusedIssue},
-			},
-			recursive: true,
-		},
-	}}, view)
+	}, view)
 
 	// Generate a depth-specific view.
 	view = project.GenerateView(WithDepth(1))
 	require.Len(t, view.SubViews, 3)
-	require.Equal(t, &View{SubViews: map[string]*SubView{
-		".": {
-			Path:      ".",
-			LineCount: 32,
-			Issues: map[string][]*result.Issue{
-				"govet": {rootGoVetIssue},
+	require.Equal(t, &View{
+		Path: project.Path,
+		SubViews: map[string]*SubView{
+			".": {
+				Path:      ".",
+				LineCount: 32,
+				Issues: map[string][]*result.Issue{
+					"govet": {rootGoVetIssue},
+				},
+			},
+			"bar/...": {
+				Path:      "bar/...",
+				LineCount: 4,
+				Issues: map[string][]*result.Issue{
+					"unused": {barUnusedIssue},
+				},
+				recursive: true,
+			},
+			"foo/...": {
+				Path:      "foo/...",
+				LineCount: 11,
+				Issues: map[string][]*result.Issue{
+					"govet":  {fooDirGoVetIssue},
+					"unused": {fooDirUnusedIssue},
+				},
+				recursive: true,
 			},
 		},
-		"bar/...": {
-			Path:      "bar/...",
-			LineCount: 4,
-			Issues: map[string][]*result.Issue{
-				"unused": {barUnusedIssue},
-			},
-			recursive: true,
-		},
-		"foo/...": {
-			Path:      "foo/...",
-			LineCount: 11,
-			Issues: map[string][]*result.Issue{
-				"govet":  {fooDirGoVetIssue},
-				"unused": {fooDirUnusedIssue},
-			},
-			recursive: true,
-		},
-	}}, view)
+	}, view)
 }
