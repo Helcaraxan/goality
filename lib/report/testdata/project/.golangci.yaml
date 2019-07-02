@@ -1,0 +1,32 @@
+# For full documentation of the configuration options please
+# see: https://github.com/golangci/golangci-lint#config-file.
+
+# linters that we should / shouldn't run
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - gofmt
+    - goimports
+    - golint
+    - govet
+    - misspell
+    - nakedret
+    - unparam
+    - unused
+
+
+# all available settings of specific linters, we can set an option for
+# a given linter even if we deactivate that same linter at runtime
+linters-settings:
+  govet:
+    check-shadowing: true
+
+  misspell:
+    # Correct spellings using locale preferences for US or UK.
+    # Default is to use a neutral variety of English.
+    # Setting locale to US will correct the British spelling of 'colour' to 'color'.
+    locale: UK
+  nakedret:
+    # make an issue if func has more lines of code than this setting and it has naked returns; default is 30
+    max-func-lines: 0 # Warn on all naked returns.

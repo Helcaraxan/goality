@@ -2,7 +2,8 @@ package report
 
 import (
 	"go/token"
-	"io/ioutil"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/golangci/golangci-lint/pkg/result"
@@ -10,117 +11,154 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var fakeProject = &Project{
-	Path: "/my/project",
-	root: &Directory{
-		Path: ".",
-		SubDirectories: map[string]*Directory{
-			"foo": {
-				Path: "foo",
-				SubDirectories: map[string]*Directory{
-					"dir": {
-						Path:           "foo/dir",
-						SubDirectories: map[string]*Directory{},
-						Files: map[string]*File{
-							"file.go": {
-								Path:      "file.go",
-								LineCount: 30,
-								Issues: map[string][]*result.Issue{
-									"mylinter": {
-										{
-											FromLinter: "mylinter",
-											Pos:        token.Position{Filename: "foo/dir/file.go"},
-										},
-										{
-											FromLinter: "mylinter",
-											Pos:        token.Position{Filename: "foo/dir/file.go"},
-										},
-									},
-									"mystaticanalysis": {
-										{
-											FromLinter: "mystaticanalysis",
-											Pos:        token.Position{Filename: "foo/dir/file.go"},
-										},
+func init() {
+	cwd, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+	fakeProject.Path = filepath.Join(cwd, "testdata", "project")
+}
+
+var (
+	barUnusedIssue = &result.Issue{
+		FromLinter: "unused",
+		Text:       "U1000: func `unusedFunc` is unused",
+		Pos: token.Position{
+			Filename: "bar/file.go",
+			Offset:   18,
+			Line:     3,
+			Column:   6,
+		},
+		SourceLines: []string{"func unusedFunc() (err error) {"},
+	}
+	fooDirGoVetIssue = &result.Issue{
+		FromLinter: "govet",
+		Text:       "shadow: declaration of \"myString\" shadows declaration at line 6",
+		Pos: token.Position{
+			Filename: "foo/dir/file.go",
+			Offset:   102,
+			Line:     8,
+			Column:   3,
+		},
+		SourceLines: []string{"\t\tmyString := \"Let it snow!\""},
+	}
+	fooDirUnusedIssue = &result.Issue{
+		FromLinter: "unused",
+		Text:       "U1000: func `unworthy` is unused",
+		Pos: token.Position{
+			Filename: "foo/dir/file.go",
+			Offset:   187,
+			Line:     14,
+			Column:   6,
+		},
+		SourceLines: []string{"func unworthy() {}"},
+	}
+	rootGoVetIssue = &result.Issue{
+		FromLinter: "govet",
+		Text:       "shadow: declaration of \"err\" shadows declaration at line 11",
+		Pos: token.Position{
+			Filename: "file.go",
+			Offset:   206,
+			Line:     19,
+			Column:   3,
+		},
+		SourceLines: []string{"\t\terr := russianRoulette()"},
+	}
+
+	fakeProject = &Project{
+		root: &Directory{
+			Path: ".",
+			SubDirectories: map[string]*Directory{
+				"bar": {
+					Path:           "bar",
+					SubDirectories: map[string]*Directory{},
+					Files: map[string]*File{
+						"file.go": {
+							Path:      "bar/file.go",
+							LineCount: 4,
+							Issues: map[string][]*result.Issue{
+								"unused": {barUnusedIssue},
+							},
+						},
+					},
+				},
+				"foo": {
+					Path: "foo",
+					SubDirectories: map[string]*Directory{
+						"dir": {
+							Path:           "foo/dir",
+							SubDirectories: map[string]*Directory{},
+							Files: map[string]*File{
+								"file.go": {
+									Path:      "foo/dir/file.go",
+									LineCount: 11,
+									Issues: map[string][]*result.Issue{
+										"govet":  {fooDirGoVetIssue},
+										"unused": {fooDirUnusedIssue},
 									},
 								},
 							},
 						},
 					},
+					Files: map[string]*File{},
 				},
-				Files: map[string]*File{},
 			},
+			Files: map[string]*File{
+				"file.go": {
+					Path:      "file.go",
+					LineCount: 32,
+					Issues: map[string][]*result.Issue{
+						"govet": {rootGoVetIssue},
+					},
+				},
+			},
+		},
+	}
+)
+
+func Test_AddIssue(t *testing.T) {
+	logger := logrus.New()
+
+	project := &Project{root: &Directory{
+		Path: ".",
+		SubDirectories: map[string]*Directory{
 			"bar": {
 				Path:           "bar",
 				SubDirectories: map[string]*Directory{},
 				Files: map[string]*File{
 					"file.go": {
-						Path:      "bar/file.go",
-						LineCount: 15,
-						Issues:    map[string][]*result.Issue{},
+						Path:   "bar/file.go",
+						Issues: map[string][]*result.Issue{},
 					},
 				},
 			},
 		},
-		Files: map[string]*File{
-			"file.go": {
-				Path:      "file.go",
-				LineCount: 10,
-				Issues: map[string][]*result.Issue{
-					"mylinter": {
-						{
-							FromLinter: "mylinter",
-							Pos:        token.Position{Filename: "file.go"},
-						},
-					},
-				},
-			},
-		},
-	},
-}
-
-func Test_Views(t *testing.T) {
-	logger := logrus.New()
-	logger.SetOutput(ioutil.Discard)
-
-	// Add a new issue.
+		Files: map[string]*File{},
+	}}
 	issue := &result.Issue{
 		FromLinter: "mystaticanalysis",
 		Pos:        token.Position{Filename: "bar/file.go"},
 	}
 
-	fakeProject.addIssue(logger, issue)
-	require.Equal(t, []*result.Issue{issue}, fakeProject.root.SubDirectories["bar"].Files["file.go"].Issues["mystaticanalysis"])
+	project.addIssue(logger, issue)
+	require.Equal(t, []*result.Issue{issue}, project.root.SubDirectories["bar"].Files["file.go"].Issues["mystaticanalysis"])
+}
 
+func Test_Views(t *testing.T) {
 	// Generate a global project view.
 	view := fakeProject.GenerateView()
 	require.Len(t, view.SubViews, 1)
 	require.Equal(t, &SubView{
 		Path:      "./...",
-		LineCount: 55,
+		LineCount: 47,
 		Issues: map[string][]*result.Issue{
-			"mylinter": {
-				{
-					FromLinter: "mylinter",
-					Pos:        token.Position{Filename: "file.go"},
-				},
-				{
-					FromLinter: "mylinter",
-					Pos:        token.Position{Filename: "foo/dir/file.go"},
-				},
-				{
-					FromLinter: "mylinter",
-					Pos:        token.Position{Filename: "foo/dir/file.go"},
-				},
+			"govet": {
+				rootGoVetIssue,
+				fooDirGoVetIssue,
 			},
-			"mystaticanalysis": {
-				{
-					FromLinter: "mystaticanalysis",
-					Pos:        token.Position{Filename: "bar/file.go"},
-				},
-				{
-					FromLinter: "mystaticanalysis",
-					Pos:        token.Position{Filename: "foo/dir/file.go"},
-				},
+			"unused": {
+				barUnusedIssue,
+				fooDirUnusedIssue,
 			},
 		},
 		recursive: true,
@@ -132,36 +170,17 @@ func Test_Views(t *testing.T) {
 	require.Equal(t, &View{SubViews: map[string]*SubView{
 		"bar/file.go": {
 			Path:      "bar/file.go",
-			LineCount: 15,
+			LineCount: 4,
 			Issues: map[string][]*result.Issue{
-				"mystaticanalysis": {
-					{
-						FromLinter: "mystaticanalysis",
-						Pos:        token.Position{Filename: "bar/file.go"},
-					},
-				},
+				"unused": {barUnusedIssue},
 			},
 		},
 		"foo/dir/...": {
 			Path:      "foo/dir/...",
-			LineCount: 30,
+			LineCount: 11,
 			Issues: map[string][]*result.Issue{
-				"mylinter": {
-					{
-						FromLinter: "mylinter",
-						Pos:        token.Position{Filename: "foo/dir/file.go"},
-					},
-					{
-						FromLinter: "mylinter",
-						Pos:        token.Position{Filename: "foo/dir/file.go"},
-					},
-				},
-				"mystaticanalysis": {
-					{
-						FromLinter: "mystaticanalysis",
-						Pos:        token.Position{Filename: "foo/dir/file.go"},
-					},
-				},
+				"govet":  {fooDirGoVetIssue},
+				"unused": {fooDirUnusedIssue},
 			},
 			recursive: true,
 		},
@@ -173,49 +192,25 @@ func Test_Views(t *testing.T) {
 	require.Equal(t, &View{SubViews: map[string]*SubView{
 		".": {
 			Path:      ".",
-			LineCount: 10,
+			LineCount: 32,
 			Issues: map[string][]*result.Issue{
-				"mylinter": {
-					{
-						FromLinter: "mylinter",
-						Pos:        token.Position{Filename: "file.go"},
-					},
-				},
+				"govet": {rootGoVetIssue},
 			},
 		},
 		"bar/...": {
 			Path:      "bar/...",
-			LineCount: 15,
+			LineCount: 4,
 			Issues: map[string][]*result.Issue{
-				"mystaticanalysis": {
-					{
-						FromLinter: "mystaticanalysis",
-						Pos:        token.Position{Filename: "bar/file.go"},
-					},
-				},
+				"unused": {barUnusedIssue},
 			},
 			recursive: true,
 		},
 		"foo/...": {
 			Path:      "foo/...",
-			LineCount: 30,
+			LineCount: 11,
 			Issues: map[string][]*result.Issue{
-				"mylinter": {
-					{
-						FromLinter: "mylinter",
-						Pos:        token.Position{Filename: "foo/dir/file.go"},
-					},
-					{
-						FromLinter: "mylinter",
-						Pos:        token.Position{Filename: "foo/dir/file.go"},
-					},
-				},
-				"mystaticanalysis": {
-					{
-						FromLinter: "mystaticanalysis",
-						Pos:        token.Position{Filename: "foo/dir/file.go"},
-					},
-				},
+				"govet":  {fooDirGoVetIssue},
+				"unused": {fooDirUnusedIssue},
 			},
 			recursive: true,
 		},

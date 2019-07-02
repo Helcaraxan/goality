@@ -69,7 +69,7 @@ func Test_LintOptsToArgs(t *testing.T) {
 	}{
 		"NoOpts": {
 			lintOpts: &LintOpts{},
-			expected: nil,
+			expected: []string{"--no-config"},
 		},
 		"ConfigOnly": {
 			lintOpts: &LintOpts{configPath: "bar.yaml"},

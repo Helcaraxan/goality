@@ -28,12 +28,21 @@ type SubView struct {
 func (s *SubView) String() string {
 	printer := &strings.Builder{}
 	fmt.Fprintf(printer, "Analysis for %s covering %.2fk lines of code.\n\nLinters:\n", s.Path, float32(s.LineCount)/1000)
+
+	var linters []string
+	for linterName := range s.Issues {
+		linters = append(linters, linterName)
+	}
+	sort.Strings(linters)
+
 	var issueCount int
-	for linterName, issues := range s.Issues {
+	for idx := range linters {
+		issues := s.Issues[linters[idx]]
+		fmt.Fprintf(printer, "- %s: %.2f issues / 1k LoC\n", linters[idx], float32(len(issues))/float32(s.LineCount)*1000)
 		issueCount += len(issues)
-		fmt.Fprintf(printer, "- %s: %.2f issues / 1k LoC\n", linterName, float32(len(issues))/float32(s.LineCount)*1000)
 	}
 	fmt.Fprintf(printer, "\nTotal number of issues: %d\n", issueCount)
+
 	return printer.String()
 }
 
@@ -114,7 +123,6 @@ type File struct {
 	Issues    map[string][]*result.Issue
 }
 
-// GenerateDirectory returns the Directory found at the given path (if any).
 func (d *Directory) getDirectory(path []string) *Directory {
 	if len(path) == 0 || path[0] == "." {
 		return d

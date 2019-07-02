@@ -33,10 +33,12 @@ func Parse(logger *logrus.Logger, path string, opts ...*LintOpts) (*Project, err
 		logger: logger,
 		opts:   opt,
 	}
+	if parser.opts == nil {
+		parser.opts = &LintOpts{}
+	}
 
 	logger.Infof("Parsing project at path %q.", path)
-	parser.project, err = parser.parseProject(path)
-	if err != nil {
+	if err = parser.parse(path); err != nil {
 		return nil, err
 	}
 	logger.Infof("Linting project at path %q.", path)
@@ -88,14 +90,14 @@ func aggregateLintOpts(opts ...*LintOpts) (*LintOpts, error) {
 }
 
 func (o *LintOpts) toArgs() []string {
-	var args []string
-	if o.configPath == "" && len(o.linters) > 0 {
+	args := []string{}
+	if o.configPath == "" {
 		args = append(args, "--no-config")
-	} else if o.configPath != "" {
+	} else {
 		args = append(args, "--config="+o.configPath)
 	}
 
-	if len(o.linters) != 0 {
+	if len(o.linters) > 0 {
 		args = append(args, "--disable-all", "--enable="+strings.Join(o.linters, ","))
 	}
 	return args
@@ -107,29 +109,40 @@ type parser struct {
 	opts    *LintOpts
 }
 
-func (p *parser) parseProject(path string) (*Project, error) {
+func (p *parser) parse(path string) error {
 	if !filepath.IsAbs(path) {
 		cwd, err := os.Getwd()
 		if err != nil {
 			p.logger.WithError(err).Error("Could not determine the current working directory.")
-			return nil, err
+			return err
 		}
 		path = filepath.Join(cwd, path)
 	}
 
-	if err := os.Chdir(path); err != nil {
-		p.logger.WithError(err).Errorf("Could not move to the project's root directory.")
-		return nil, err
+	cwd, err := os.Getwd()
+	if err != nil {
+		p.logger.WithError(err).Errorf("Could not determine the current working directory.")
+		return err
 	}
+	if err = os.Chdir(path); err != nil {
+		p.logger.WithError(err).Errorf("Could not move to the project's root directory.")
+		return err
+	}
+	defer func() {
+		if moveErr := os.Chdir(cwd); moveErr != nil {
+			p.logger.WithError(err).Errorf("Failed to move back to the original working directory %q.", cwd)
+		}
+	}()
 
 	root, err := p.parseDirectory(".")
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return &Project{
+	p.project = &Project{
 		Path: path,
 		root: root,
-	}, nil
+	}
+	return nil
 }
 
 func (p *parser) parseDirectory(path string) (*Directory, error) {
@@ -203,6 +216,8 @@ func (p *parser) lint() error {
 	cliArgs := append([]string{
 		"run",
 		"--issues-exit-code=0",
+		"--max-issues-per-linter=0",
+		"--max-same-issues=0",
 		"--new=false",
 		"--new-from-rev=",
 		"--out-format=json",
@@ -256,6 +271,7 @@ func (p *parser) runManagedLint(cliArgs []string) ([]byte, bool, error) {
 	lintCmd := exec.Command("golangci-lint", cliArgs...)
 	output, errs := &bytes.Buffer{}, &strings.Builder{}
 	lintCmd.Stdout, lintCmd.Stderr = output, errs
+	lintCmd.Dir = p.project.Path
 
 	done, interrupt := make(chan struct{}), make(chan struct{})
 	go p.memoryMonitor(done, interrupt)
