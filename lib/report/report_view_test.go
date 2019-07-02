@@ -11,14 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func init() {
-	cwd, err := os.Getwd()
-	if err != nil {
-		panic(err)
-	}
-	fakeProject.Path = filepath.Join(cwd, "testdata", "project")
-}
-
 var (
 	barUnusedIssue = &result.Issue{
 		FromLinter: "unused",
@@ -64,8 +56,16 @@ var (
 		},
 		SourceLines: []string{"\t\terr := russianRoulette()"},
 	}
+)
 
-	fakeProject = &Project{
+func createParsedProject() *Project {
+	cwd, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+
+	return &Project{
+		Path: filepath.Join(cwd, "testdata", "project"),
 		root: &Directory{
 			Path: ".",
 			SubDirectories: map[string]*Directory{
@@ -76,9 +76,7 @@ var (
 						"file.go": {
 							Path:      "bar/file.go",
 							LineCount: 4,
-							Issues: map[string][]*result.Issue{
-								"unused": {barUnusedIssue},
-							},
+							Issues:    map[string][]*result.Issue{},
 						},
 					},
 				},
@@ -92,10 +90,7 @@ var (
 								"file.go": {
 									Path:      "foo/dir/file.go",
 									LineCount: 11,
-									Issues: map[string][]*result.Issue{
-										"govet":  {fooDirGoVetIssue},
-										"unused": {fooDirUnusedIssue},
-									},
+									Issues:    map[string][]*result.Issue{},
 								},
 							},
 						},
@@ -107,14 +102,23 @@ var (
 				"file.go": {
 					Path:      "file.go",
 					LineCount: 32,
-					Issues: map[string][]*result.Issue{
-						"govet": {rootGoVetIssue},
-					},
+					Issues:    map[string][]*result.Issue{},
 				},
 			},
 		},
 	}
-)
+}
+
+func createLintedProject() *Project {
+	project := createParsedProject()
+
+	project.root.SubDirectories["bar"].Files["file.go"].Issues["unused"] = []*result.Issue{barUnusedIssue}
+	project.root.SubDirectories["foo"].SubDirectories["dir"].Files["file.go"].Issues["govet"] = []*result.Issue{fooDirGoVetIssue}
+	project.root.SubDirectories["foo"].SubDirectories["dir"].Files["file.go"].Issues["unused"] = []*result.Issue{fooDirUnusedIssue}
+	project.root.Files["file.go"].Issues["govet"] = []*result.Issue{rootGoVetIssue}
+
+	return project
+}
 
 func Test_AddIssue(t *testing.T) {
 	logger := logrus.New()
@@ -145,8 +149,9 @@ func Test_AddIssue(t *testing.T) {
 }
 
 func Test_Views(t *testing.T) {
+	project := createLintedProject()
 	// Generate a global project view.
-	view := fakeProject.GenerateView()
+	view := project.GenerateView()
 	require.Len(t, view.SubViews, 1)
 	require.Equal(t, &SubView{
 		Path:      "./...",
@@ -165,7 +170,7 @@ func Test_Views(t *testing.T) {
 	}, view.SubViews["./..."])
 
 	// Generate a path-specific view.
-	view = fakeProject.GenerateView(WithPaths("foo/dir", "bar/file.go"))
+	view = project.GenerateView(WithPaths("foo/dir", "bar/file.go"))
 	require.Len(t, view.SubViews, 2)
 	require.Equal(t, &View{SubViews: map[string]*SubView{
 		"bar/file.go": {
@@ -187,7 +192,7 @@ func Test_Views(t *testing.T) {
 	}}, view)
 
 	// Generate a depth-specific view.
-	view = fakeProject.GenerateView(WithDepth(1))
+	view = project.GenerateView(WithDepth(1))
 	require.Len(t, view.SubViews, 3)
 	require.Equal(t, &View{SubViews: map[string]*SubView{
 		".": {

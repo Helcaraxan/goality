@@ -228,14 +228,15 @@ func (p *parser) lint() error {
 		current := todo[0]
 		todo = todo[1:]
 
-		interrupted, err := p.runLint(append(cliArgs, current.Path+"/..."))
+		interrupted, err := p.runLint(cliArgs, current.Path+"/...")
 		if err != nil {
 			return err
 		} else if !interrupted {
 			continue
 		}
 
-		if _, err = p.runLint(append(cliArgs, current.Path)); err != nil {
+		p.logger.Debugf("Spreading lint effort for '%s' over sub-directories.", current.Path)
+		if _, err = p.runLint(cliArgs, current.Path); err != nil {
 			return err
 		}
 		for _, subDir := range current.SubDirectories {
@@ -245,9 +246,11 @@ func (p *parser) lint() error {
 	return nil
 }
 
-func (p *parser) runLint(cliArgs []string) (bool, error) {
-	output, interrupted, err := p.runManagedLint(cliArgs)
+func (p *parser) runLint(cliArgs []string, path string) (bool, error) {
+	p.logger.Debugf("Running linter on '%s'.", path)
+	output, interrupted, err := p.runManagedLint(append(cliArgs, path))
 	if interrupted {
+		p.logger.Debugf("Linter run was interrupted due to resource constraints.")
 		return true, nil
 	} else if err != nil {
 		return false, err
@@ -259,6 +262,7 @@ func (p *parser) runLint(cliArgs []string) (bool, error) {
 		return false, err
 	}
 
+	p.logger.Debugf("Registering issues found on '%s'.", path)
 	for _, issue := range lintOutput.Issues {
 		p.project.addIssue(p.logger, issue)
 	}
@@ -283,41 +287,49 @@ func (p *parser) runManagedLint(cliArgs []string) ([]byte, bool, error) {
 	go func() {
 		select {
 		case <-interrupt:
-			if err := lintCmd.Process.Signal(os.Kill); err != nil {
-				p.logger.WithError(err).Error("Failed to interrupt linter with a KILL signal.")
+			interruptErr := lintCmd.Process.Signal(os.Kill)
+			if interruptErr != nil {
+				if strings.Contains(interruptErr.Error(), "process already finished") {
+					return
+				}
+				p.logger.WithError(interruptErr).Error("Failed to interrupt linter with a KILL signal.")
 			}
 			interrupted = true
 		case <-done:
 		}
 	}()
 
-	if err := lintCmd.Wait(); err != nil {
+	if err := lintCmd.Wait(); err != nil && !interrupted {
 		p.logger.WithError(err).Errorf("Linter exited with an error. Output was:\n%s Error was:\n%s", output.Bytes(), errs.String())
-		return nil, interrupted, err
+		return nil, false, err
 	}
 	close(done)
 
 	return output.Bytes(), interrupted, nil
 }
 
+// We use a proxy function to fetch the memory usage so that we can inject fake
+// results for testing purposes.
+var getMemoryUsage func(context.Context) (*mem.VirtualMemoryStat, error) = mem.VirtualMemoryWithContext
+
 func (p *parser) memoryMonitor(done chan struct{}, interrupt chan struct{}) {
+	defer close(interrupt)
 	for {
+		select {
+		case <-done:
+			return
+		case <-time.After(1 * time.Second):
+		}
+
 		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-		memStat, err := mem.VirtualMemoryWithContext(ctx)
+		memStat, err := getMemoryUsage(ctx)
 		cancel()
 		if err != nil {
 			p.logger.WithError(err).Debugf("Failed to retrieve memory usage.")
 		}
 		p.logger.Debugf("Memory usage: %.2f%%.", memStat.UsedPercent)
 		if memStat.UsedPercent > 90.0 {
-			close(interrupt)
-		}
-
-		select {
-		case <-done:
-			close(interrupt)
 			return
-		case <-time.After(1 * time.Second):
 		}
 	}
 }
