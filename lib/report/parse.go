@@ -228,6 +228,10 @@ func (p *parser) lint() error {
 		current := todo[0]
 		todo = todo[1:]
 
+		if !current.hasFiles(true) {
+			continue
+		}
+
 		interrupted, err := p.runLint(cliArgs, current.Path+"/...")
 		if err != nil {
 			return err
@@ -236,8 +240,10 @@ func (p *parser) lint() error {
 		}
 
 		p.logger.Debugf("Spreading lint effort for '%s' over sub-directories.", current.Path)
-		if _, err = p.runLint(cliArgs, current.Path); err != nil {
-			return err
+		if current.hasFiles(false) {
+			if _, err = p.runLint(cliArgs, current.Path); err != nil {
+				return err
+			}
 		}
 		for _, subDir := range current.SubDirectories {
 			todo = append(todo, subDir)

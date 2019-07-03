@@ -127,6 +127,20 @@ type File struct {
 	Issues    map[string][]*result.Issue
 }
 
+func (d *Directory) hasFiles(recursive bool) bool {
+	if len(d.Files) > 0 {
+		return true
+	} else if !recursive {
+		return false
+	}
+	for _, subDirectory := range d.SubDirectories {
+		if subDirectory.hasFiles(true) {
+			return true
+		}
+	}
+	return false
+}
+
 func (d *Directory) getDirectory(path []string) *Directory {
 	if len(path) == 0 || path[0] == "." {
 		return d
