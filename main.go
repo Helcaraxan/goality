@@ -1,8 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -67,6 +70,7 @@ func initRunCommand(commonArgs *commonArgs) *cobra.Command {
 				args = append(args, ".")
 			}
 			cArgs.projectPath = args[0]
+
 			return executeRunCommand(cArgs)
 		},
 	}
@@ -80,6 +84,29 @@ func initRunCommand(commonArgs *commonArgs) *cobra.Command {
 }
 
 func executeRunCommand(args *runArgs) error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		args.logger.WithError(err).Error("Failed to determine the current working directory")
+		return err
+	}
+	if !filepath.IsAbs(args.config) {
+		args.config = filepath.Join(cwd, args.config)
+	}
+	if !filepath.IsAbs(args.projectPath) {
+		args.projectPath = filepath.Join(cwd, args.projectPath)
+	}
+	for idx := range args.paths {
+		if filepath.IsAbs(args.paths[idx]) {
+			relPath, err := filepath.Rel(args.projectPath, args.paths[idx])
+			if err != nil {
+				return err
+			} else if strings.HasPrefix(relPath, "../") {
+				return fmt.Errorf("specified path %q is outside of the targeted project at %q", args.paths[idx], args.projectPath)
+			}
+			args.paths[idx] = relPath
+		}
+	}
+
 	project, err := report.Parse(args.logger, args.projectPath, report.WithConfig(args.config), report.WithLinters(args.linters...))
 	if err != nil {
 		return err
