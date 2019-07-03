@@ -14,52 +14,14 @@ func Print(w io.Writer, view *report.View) error {
 	if len(view.SubViews) == 0 {
 		return nil
 	}
-	subViewPaths, lintersList := viewLists(view)
+	linterList, subViewList := viewLists(view)
 
 	resultMatrix := [][]interface{}{}
-	for _, subViewPath := range subViewPaths {
-		resultMatrix = append(resultMatrix, getSubViewLine(view.SubViews[subViewPath], lintersList))
+	for _, subViewPath := range subViewList {
+		resultMatrix = append(resultMatrix, getSubViewLine(view.SubViews[subViewPath], linterList))
 	}
 
-	var headerWidths []int
-	for idx := range lintersList {
-		headerWidths = append(headerWidths, len(lintersList[idx]))
-	}
-
-	var columnWidths []int
-	for column := 0; column < len(resultMatrix[0]); column++ {
-		var maxFieldLength int
-		for line := 0; line < len(resultMatrix); line++ {
-			if len(resultMatrix[line][column].(string)) > maxFieldLength {
-				maxFieldLength = len(resultMatrix[line][column].(string))
-			}
-		}
-		columnWidths = append(columnWidths, maxFieldLength)
-	}
-
-	var header string
-	var lineTemplate string
-	if len("path") > columnWidths[0] {
-		header = "path "
-		lineTemplate = fmt.Sprintf("%%-%ds ", len("path"))
-	} else {
-		headerTemplate := fmt.Sprintf("%%-%ds ", columnWidths[0])
-		header = fmt.Sprintf(headerTemplate, "path")
-		lineTemplate = fmt.Sprintf("%%-%ds ", columnWidths[0])
-	}
-
-	for idx := range lintersList {
-		if headerWidths[idx] > columnWidths[2*idx+1]+columnWidths[2*idx+2]+1 {
-			header += lintersList[idx] + "  "
-			lineTemplate += fmt.Sprintf("%%-%ds %%-%ds  ", columnWidths[2*idx+1], headerWidths[idx]-columnWidths[2*idx+1])
-		} else {
-			headerTemplate := fmt.Sprintf("%%-%ds  ", columnWidths[2*idx+1]+columnWidths[2*idx+2]+1)
-			header += fmt.Sprintf(headerTemplate, lintersList[idx])
-			lineTemplate += fmt.Sprintf("%%-%ds %%-%ds  ", columnWidths[2*idx+1], columnWidths[2*idx+2])
-		}
-	}
-	lineTemplate += "\n"
-
+	header, lineTemplate := generateHeaderAndLineTemplate(linterList, resultMatrix)
 	_, err := fmt.Fprintf(w, "Report for Go codebase located at '%s'\n\n%s\n", view.Path, header)
 	if err != nil {
 		return err
@@ -74,21 +36,21 @@ func Print(w io.Writer, view *report.View) error {
 }
 
 func viewLists(view *report.View) ([]string, []string) {
-	var subViewPaths []string
-	lintersSet := map[string]struct{}{}
+	var subViewList []string
+	linterSet := map[string]struct{}{}
 	for _, subView := range view.SubViews {
-		subViewPaths = append(subViewPaths, subView.Path)
+		subViewList = append(subViewList, subView.Path)
 		for linter := range subView.Issues {
-			lintersSet[linter] = struct{}{}
+			linterSet[linter] = struct{}{}
 		}
 	}
-	var linters []string
-	for linter := range lintersSet {
-		linters = append(linters, linter)
+	var linterList []string
+	for linter := range linterSet {
+		linterList = append(linterList, linter)
 	}
-	sort.Sort(paths(subViewPaths))
-	sort.Strings(linters)
-	return subViewPaths, linters
+	sort.Sort(paths(subViewList))
+	sort.Strings(linterList)
+	return linterList, subViewList
 }
 
 func getSubViewLine(subView *report.SubView, linters []string) []interface{} {
@@ -98,6 +60,52 @@ func getSubViewLine(subView *report.SubView, linters []string) []interface{} {
 		results = append(results, fmt.Sprintf("%d", issueCount), fmt.Sprintf("(%5.2f)", 1000*float32(issueCount)/float32(subView.LineCount)))
 	}
 	return results
+}
+
+func generateHeaderAndLineTemplate(linterList []string, resultMatrix [][]interface{}) (string, string) {
+	columnWidths := computeColumnWidths(linterList, resultMatrix)
+
+	lineTemplate := fmt.Sprintf("%%-%ds ", columnWidths[0])
+	header := fmt.Sprintf(lineTemplate, "path")
+
+	for idx := range columnWidths[1:] {
+		lineTemplate += fmt.Sprintf("%%-%ds ", columnWidths[idx+1])
+		if idx%2 == 1 {
+			lineTemplate += " "
+			headerFieldTemplate := fmt.Sprintf("%%-%ds  ", columnWidths[idx]+columnWidths[idx+1]+1)
+			header += fmt.Sprintf(headerFieldTemplate, linterList[idx/2])
+		}
+	}
+	return header, lineTemplate + "\n"
+}
+
+func computeColumnWidths(linterList []string, resultMatrix [][]interface{}) []int {
+	var headerWidths []int
+	for idx := range linterList {
+		headerWidths = append(headerWidths, len(linterList[idx]))
+	}
+
+	maxFieldLength := len("path")
+	for _, row := range resultMatrix {
+		if len(row[0].(string)) > maxFieldLength {
+			maxFieldLength = len(row[0].(string))
+		}
+	}
+
+	columnWidths := []int{maxFieldLength}
+	for column := range resultMatrix[0][1:] {
+		maxFieldLength = 0
+		for line := range resultMatrix {
+			if len(resultMatrix[line][column+1].(string)) > maxFieldLength {
+				maxFieldLength = len(resultMatrix[line][column+1].(string))
+			}
+		}
+		if column%2 == 1 && maxFieldLength < headerWidths[column/2]-columnWidths[column]-1 {
+			maxFieldLength = headerWidths[column/2] - columnWidths[column] - 1
+		}
+		columnWidths = append(columnWidths, maxFieldLength)
+	}
+	return columnWidths
 }
 
 type paths []string
