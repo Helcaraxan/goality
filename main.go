@@ -89,7 +89,7 @@ func executeRunCommand(args *runArgs) error {
 		args.logger.WithError(err).Error("Failed to determine the current working directory")
 		return err
 	}
-	if !filepath.IsAbs(args.config) {
+	if args.config != "" && !filepath.IsAbs(args.config) {
 		args.config = filepath.Join(cwd, args.config)
 	}
 	if !filepath.IsAbs(args.projectPath) {
