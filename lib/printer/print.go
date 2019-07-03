@@ -22,7 +22,7 @@ func Print(w io.Writer, view *report.View) error {
 	}
 
 	header, lineTemplate := generateHeaderAndLineTemplate(linterList, resultMatrix)
-	_, err := fmt.Fprintf(w, "Report for Go codebase located at '%s'\n\n%s\n", view.Path, header)
+	_, err := fmt.Fprintf(w, "Quality report for Go codebase located at '%s'\n\n%s\n", view.Path, header)
 	if err != nil {
 		return err
 	}
