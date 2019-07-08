@@ -14,50 +14,44 @@ func Print(w io.Writer, view *report.View) error {
 	if len(view.SubViews) == 0 {
 		return nil
 	}
-	linterList, subViewList := viewLists(view)
+	subViewList := viewList(view)
 
 	resultMatrix := [][]interface{}{}
 	for _, subViewPath := range subViewList {
-		resultMatrix = append(resultMatrix, getSubViewLine(view.SubViews[subViewPath], linterList))
+		resultMatrix = append(resultMatrix, getSubViewLine(view.SubViews[subViewPath], view.Linters))
 	}
 
-	header, lineTemplate := generateHeaderAndLineTemplate(linterList, resultMatrix)
-	_, err := fmt.Fprintf(w, "Quality report for Go codebase located at '%s'\n\n%s\n", view.Path, header)
-	if err != nil {
-		return err
+	header, lineTemplate := generateHeaderAndLineTemplate(view.Linters, resultMatrix)
+	output := []string{
+		fmt.Sprintf("Quality report for Go codebase located at '%s'\n\n%s", view.Path, header),
 	}
 	for _, line := range resultMatrix {
-		_, err = fmt.Fprintf(w, lineTemplate, line...)
-		if err != nil {
-			return err
-		}
+		output = append(output, fmt.Sprintf(lineTemplate, line...))
 	}
-	return nil
+	output = append(output, "\nData-format: total-issues (average issues per 1K LoC)")
+
+	_, err := fmt.Fprintln(w, strings.Join(output, "\n"))
+	return err
 }
 
-func viewLists(view *report.View) ([]string, []string) {
+func viewList(view *report.View) []string {
 	var subViewList []string
-	linterSet := map[string]struct{}{}
 	for _, subView := range view.SubViews {
 		subViewList = append(subViewList, subView.Path)
-		for linter := range subView.Issues {
-			linterSet[linter] = struct{}{}
-		}
-	}
-	var linterList []string
-	for linter := range linterSet {
-		linterList = append(linterList, linter)
 	}
 	sort.Sort(paths(subViewList))
-	sort.Strings(linterList)
-	return linterList, subViewList
+	return subViewList
 }
 
 func getSubViewLine(subView *report.SubView, linters []string) []interface{} {
 	results := []interface{}{subView.Path}
 	for _, linter := range linters {
 		issueCount := len(subView.Issues[linter])
-		results = append(results, fmt.Sprintf("%d", issueCount), fmt.Sprintf("(%5.2f)", 1000*float32(issueCount)/float32(subView.LineCount)))
+		var occurenceRate float32
+		if issueCount > 0 {
+			occurenceRate = 1000 * float32(issueCount) / float32(subView.LineCount)
+		}
+		results = append(results, fmt.Sprintf("%d", issueCount), fmt.Sprintf("(%5.2f)", occurenceRate))
 	}
 	return results
 }
@@ -76,7 +70,7 @@ func generateHeaderAndLineTemplate(linterList []string, resultMatrix [][]interfa
 			header += fmt.Sprintf(headerFieldTemplate, linterList[idx/2])
 		}
 	}
-	return header, lineTemplate + "\n"
+	return header, lineTemplate
 }
 
 func computeColumnWidths(linterList []string, resultMatrix [][]interface{}) []int {

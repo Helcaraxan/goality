@@ -15,6 +15,7 @@ import (
 type View struct {
 	Path     string
 	SubViews map[string]*SubView
+	Linters  []string
 }
 
 // SubView represents the aggregated lint results for a single directory and it's subtree.
@@ -23,6 +24,7 @@ type SubView struct {
 	Issues    map[string][]*result.Issue
 	LineCount int
 
+	linters   []string
 	recursive bool
 }
 
@@ -30,16 +32,16 @@ func (s *SubView) String() string {
 	printer := &strings.Builder{}
 	fmt.Fprintf(printer, "Analysis for %s covering %.2fk lines of code.\n\nLinters:\n", s.Path, float32(s.LineCount)/1000)
 
-	var linters []string
-	for linterName := range s.Issues {
-		linters = append(linters, linterName)
-	}
-	sort.Strings(linters)
+	sort.Strings(s.linters)
 
 	var issueCount int
-	for idx := range linters {
-		issues := s.Issues[linters[idx]]
-		fmt.Fprintf(printer, "- %s: %.2f issues / 1k LoC\n", linters[idx], float32(len(issues))/float32(s.LineCount)*1000)
+	for idx := range s.linters {
+		issues := s.Issues[s.linters[idx]]
+		var occurenceRate float32
+		if len(issues) > 0 {
+			occurenceRate = float32(len(issues)) / float32(s.LineCount) * 1000
+		}
+		fmt.Fprintf(printer, "- %s: %.2f issues / 1k LoC\n", s.linters[idx], occurenceRate)
 		issueCount += len(issues)
 	}
 	fmt.Fprintf(printer, "\nTotal number of issues: %d\n", issueCount)
@@ -70,7 +72,8 @@ func WithPaths(paths ...string) *ViewOpts {
 type Project struct {
 	Path string
 
-	root *Directory
+	linters []string
+	root    *Directory
 }
 
 // Directory returns the information for the directory located at the given relative path in the
@@ -101,6 +104,7 @@ func (p *Project) GenerateView(opts ...*ViewOpts) *View {
 	view := &View{
 		Path:     p.Path,
 		SubViews: map[string]*SubView{},
+		Linters:  p.linters,
 	}
 	for _, subView := range subViews {
 		view.SubViews[subView.Path] = subView

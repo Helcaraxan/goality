@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golangci/golangci-lint/pkg/report"
 	"github.com/golangci/golangci-lint/pkg/result"
 	"github.com/shirou/gopsutil/mem"
 	"github.com/sirupsen/logrus"
@@ -262,10 +263,22 @@ func (p *parser) runLint(cliArgs []string, path string) (bool, error) {
 		return false, err
 	}
 
-	lintOutput := &struct{ Issues []*result.Issue }{}
+	lintOutput := &struct {
+		Issues []*result.Issue
+		Report *report.Data
+	}{}
 	if err = json.Unmarshal(output, lintOutput); err != nil {
 		p.logger.WithError(err).Error("Could not parse linter output.")
 		return false, err
+	}
+
+	// If not yet registered list all enabled linters.
+	if len(p.project.linters) == 0 {
+		for _, linter := range lintOutput.Report.Linters {
+			if linter.Enabled {
+				p.project.linters = append(p.project.linters, linter.Name)
+			}
+		}
 	}
 
 	p.logger.Debugf("Registering issues found on '%s'.", path)
