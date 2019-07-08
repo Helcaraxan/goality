@@ -62,9 +62,16 @@ func initRunCommand(commonArgs *commonArgs) *cobra.Command {
 	cArgs := &runArgs{commonArgs: commonArgs}
 
 	cmd := &cobra.Command{
-		Use:   "run",
+		Use:   "run [path]",
 		Short: "Perform a quality analysis of the specified project.",
-		Args:  cobra.MaximumNArgs(1),
+		Long: `Run an analysis over the directory tree rooted at the specified path. If no path is given this defaults to the current working directory.
+
+Example:
+  goality run
+  goality run --config=~/.golangci.yaml --depth 1 ./cmd
+  goality run src/github.com/me/project
+`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				args = append(args, ".")
@@ -97,7 +104,8 @@ func executeRunCommand(args *runArgs) error {
 	}
 	for idx := range args.paths {
 		if filepath.IsAbs(args.paths[idx]) {
-			relPath, err := filepath.Rel(args.projectPath, args.paths[idx])
+			var relPath string
+			relPath, err = filepath.Rel(args.projectPath, args.paths[idx])
 			if err != nil {
 				return err
 			} else if strings.HasPrefix(relPath, "../") {
