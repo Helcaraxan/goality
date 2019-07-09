@@ -4,6 +4,7 @@ go 1.12
 
 require (
 	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
+	github.com/agnivade/levenshtein v1.0.2
 	github.com/go-ole/go-ole v1.2.4 // indirect
 	github.com/golangci/golangci-lint v1.17.1
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect

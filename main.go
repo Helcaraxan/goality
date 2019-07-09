@@ -43,8 +43,10 @@ func main() {
 	)
 
 	if err := rootCmd.Execute(); err != nil {
+		commonArgs.logger.WithError(err).Debugf("Execution failed.")
 		os.Exit(1)
 	}
+	commonArgs.logger.Debug("Execution successful.")
 }
 
 type runArgs struct {
@@ -104,10 +106,9 @@ func executeRunCommand(args *runArgs) error {
 	}
 	for idx := range args.paths {
 		if filepath.IsAbs(args.paths[idx]) {
-			var relPath string
-			relPath, err = filepath.Rel(args.projectPath, args.paths[idx])
-			if err != nil {
-				return err
+			relPath, relErr := filepath.Rel(args.projectPath, args.paths[idx])
+			if relErr != nil {
+				return relErr
 			} else if strings.HasPrefix(relPath, "../") {
 				return fmt.Errorf("specified path %q is outside of the targeted project at %q", args.paths[idx], args.projectPath)
 			}

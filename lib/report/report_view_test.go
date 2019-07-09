@@ -24,6 +24,10 @@ func Test_AddIssue(t *testing.T) {
 							Path:   "bar/file.go",
 							Issues: map[string][]*result.Issue{},
 						},
+						"non-go": {
+							Path:   "foo/non-go",
+							Issues: map[string][]*result.Issue{},
+						},
 					},
 				},
 			},

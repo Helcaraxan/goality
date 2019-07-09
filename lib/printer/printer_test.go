@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/Helcaraxan/goality/lib/analysis"
 	"github.com/Helcaraxan/goality/lib/report"
 )
 
@@ -35,6 +36,21 @@ Data-format: total-issues (average issues per 1K LoC)
 
 	w := &strings.Builder{}
 	require.NoError(t, PrintView(w, view))
+	assert.Equal(t, expectedOutput, w.String())
+}
+
+func Test_PrintCategories(t *testing.T) {
+	project := testProject(t)
+
+	expectedOutput := `occurences linter   issue                
+2          deadcode <identif....s unused 
+`
+
+	maxIssueTextWidth = 20
+	categories := analysis.IssueRanking(project.GenerateView(), 0)
+
+	w := &strings.Builder{}
+	require.NoError(t, PrintCategories(w, categories))
 	assert.Equal(t, expectedOutput, w.String())
 }
 
