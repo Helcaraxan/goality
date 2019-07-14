@@ -268,7 +268,7 @@ func (p *parser) runLint(cliArgs []string, path string) (bool, error) {
 		Report *report.Data
 	}{}
 	if err = json.Unmarshal(output, lintOutput); err != nil {
-		p.logger.WithError(err).Error("Could not parse linter output.")
+		p.logger.WithError(err).Errorf("Could not parse linter output:\n%s", output)
 		return false, err
 	}
 
@@ -279,6 +279,7 @@ func (p *parser) runLint(cliArgs []string, path string) (bool, error) {
 				p.project.linters = append(p.project.linters, linter.Name)
 			}
 		}
+		sort.Strings(p.project.linters)
 	}
 
 	p.logger.Debugf("Registering issues found on '%s'.", path)

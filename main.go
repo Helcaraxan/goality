@@ -119,5 +119,5 @@ func executeRunCommand(args *runArgs) error {
 	if err != nil {
 		return err
 	}
-	return printer.Print(os.Stdout, project.GenerateView(report.WithDepth(args.depth), report.WithPaths(args.paths...)))
+	return printer.PrintView(os.Stdout, project.GenerateView(report.WithDepth(args.depth), report.WithPaths(args.paths...)))
 }
