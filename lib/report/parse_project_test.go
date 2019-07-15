@@ -1,12 +1,11 @@
 package report
 
 import (
-	"context"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
-	"github.com/shirou/gopsutil/mem"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -36,28 +35,26 @@ func Test_Lint(t *testing.T) {
 }
 
 func Test_ResourceAwareness(t *testing.T) {
+	// We use a specialised memory monitor function in order to provoke a shutdown of the linter
+	// that's being run as part of the test at an arbitrary point.
+	var hasBeenInterrupted bool
+	testingMemoryMonitor := func(logger *logrus.Logger, wg *sync.WaitGroup, done chan struct{}, interrupt chan struct{}) {
+		if hasBeenInterrupted {
+			systemMemoryMonitor(logger, wg, done, interrupt)
+		} else {
+			hasBeenInterrupted = true
+			close(interrupt)
+			wg.Done()
+		}
+	}
+
 	cwd, err := os.Getwd()
 	require.NoError(t, err, "Must be able to determine the current directory.")
 	parser := &parser{
-		logger:  logrus.New(),
-		project: createParsedProject(),
-		opts:    WithConfig(filepath.Join(cwd, "testdata", "project", ".golangci.yaml")),
-	}
-
-	// We replace the memory usage getter by a custom one that ensures that we
-	// interrupt the first linter run. This can obviously not be guaranteed and
-	// is dependent on the machine and OS but it's the best we can get without
-	// significantly complicating the flow.
-	formerGetMemoryUsage := getMemoryUsage
-	defer func() { getMemoryUsage = formerGetMemoryUsage }()
-
-	var interrupted bool
-	getMemoryUsage = func(ctx context.Context) (*mem.VirtualMemoryStat, error) {
-		if !interrupted {
-			interrupted = true
-			return &mem.VirtualMemoryStat{UsedPercent: 95.0}, nil
-		}
-		return mem.VirtualMemoryWithContext(ctx)
+		logger:        logrus.New(),
+		project:       createParsedProject(),
+		opts:          WithConfig(filepath.Join(cwd, "testdata", "project", ".golangci.yaml")),
+		memoryMonitor: testingMemoryMonitor,
 	}
 
 	err = parser.lint()

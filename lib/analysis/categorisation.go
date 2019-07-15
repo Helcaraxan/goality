@@ -30,7 +30,7 @@ type IssueCategory struct {
 }
 
 func (c *IssueCategory) String() string {
-	return fmt.Sprintf("%s - %s - %d occurences", c.Linter, c.Representative, len(c.Issues))
+	return fmt.Sprintf("%s - %s - %d occurrences", c.Linter, c.Representative, len(c.Issues))
 }
 
 func IssueRanking(view *report.View, tolerance int) IssueCategories {

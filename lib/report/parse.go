@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golangci/golangci-lint/pkg/report"
@@ -104,10 +105,13 @@ func (o *LintOpts) toArgs() []string {
 	return args
 }
 
+type memoryMonitorFunc func(logger *logrus.Logger, wg *sync.WaitGroup, done chan struct{}, interrupt chan struct{})
+
 type parser struct {
-	logger  *logrus.Logger
-	project *Project
-	opts    *LintOpts
+	logger        *logrus.Logger
+	project       *Project
+	opts          *LintOpts
+	memoryMonitor memoryMonitorFunc
 }
 
 func (p *parser) parse(path string) error {
@@ -290,6 +294,9 @@ func (p *parser) runLint(cliArgs []string, path string) (bool, error) {
 }
 
 func (p *parser) runManagedLint(cliArgs []string) ([]byte, bool, error) {
+	if p.memoryMonitor == nil {
+		p.memoryMonitor = systemMemoryMonitor
+	}
 	var interrupted bool
 
 	lintCmd := exec.Command("golangci-lint", cliArgs...)
@@ -298,7 +305,9 @@ func (p *parser) runManagedLint(cliArgs []string) ([]byte, bool, error) {
 	lintCmd.Dir = p.project.Path
 
 	done, interrupt := make(chan struct{}), make(chan struct{})
-	go p.memoryMonitor(done, interrupt)
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+	go p.memoryMonitor(p.logger, &wg, done, interrupt)
 
 	if err := lintCmd.Start(); err != nil {
 		p.logger.WithError(err).Error("Unable to run linter.")
@@ -317,22 +326,22 @@ func (p *parser) runManagedLint(cliArgs []string) ([]byte, bool, error) {
 			interrupted = true
 		case <-done:
 		}
+		wg.Done()
 	}()
 
-	if err := lintCmd.Wait(); err != nil && !interrupted {
+	err := lintCmd.Wait()
+	close(done)
+	wg.Wait()
+
+	if err != nil && !interrupted {
 		p.logger.WithError(err).Errorf("Linter exited with an error. Output was:\n%s Error was:\n%s", output.Bytes(), errs.String())
 		return nil, false, err
 	}
-	close(done)
-
 	return output.Bytes(), interrupted, nil
 }
 
-// We use a proxy function to fetch the memory usage so that we can inject fake
-// results for testing purposes.
-var getMemoryUsage func(context.Context) (*mem.VirtualMemoryStat, error) = mem.VirtualMemoryWithContext
-
-func (p *parser) memoryMonitor(done chan struct{}, interrupt chan struct{}) {
+func systemMemoryMonitor(logger *logrus.Logger, wg *sync.WaitGroup, done chan struct{}, interrupt chan struct{}) {
+	defer wg.Done()
 	defer close(interrupt)
 	for {
 		select {
@@ -342,12 +351,12 @@ func (p *parser) memoryMonitor(done chan struct{}, interrupt chan struct{}) {
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-		memStat, err := getMemoryUsage(ctx)
+		memStat, err := mem.VirtualMemoryWithContext(ctx)
 		cancel()
 		if err != nil {
-			p.logger.WithError(err).Debugf("Failed to retrieve memory usage.")
+			logger.WithError(err).Debugf("Failed to retrieve memory usage.")
 		}
-		p.logger.Debugf("Memory usage: %.2f%%.", memStat.UsedPercent)
+		logger.Debugf("Memory usage: %.2f%%.", memStat.UsedPercent)
 		if memStat.UsedPercent > 90.0 {
 			return
 		}

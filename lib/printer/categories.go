@@ -10,7 +10,7 @@ import (
 var maxIssueTextWidth = 100
 
 func PrintCategories(w io.Writer, categories analysis.IssueCategories) error {
-	headers := []string{"occurences", "linter", "issue"}
+	headers := []string{"occurrences", "linter", "issue"}
 	var categoryMatrix [][]string
 	for idx := range categories {
 		issueContent := categories[idx].Representative
@@ -19,8 +19,8 @@ func PrintCategories(w io.Writer, categories analysis.IssueCategories) error {
 				"...." +
 				issueContent[len(issueContent)-maxIssueTextWidth/2+2:]
 		}
-		occurences := fmt.Sprintf("%d", len(categories[idx].Issues))
-		categoryMatrix = append(categoryMatrix, []string{occurences, categories[idx].Linter, issueContent})
+		occurrences := fmt.Sprintf("%d", len(categories[idx].Issues))
+		categoryMatrix = append(categoryMatrix, []string{occurrences, categories[idx].Linter, issueContent})
 	}
 
 	return printTable(w, headers, categoryMatrix, []int{1, 1, 1})

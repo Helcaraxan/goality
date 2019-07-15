@@ -42,8 +42,8 @@ Data-format: total-issues (average issues per 1K LoC)
 func Test_PrintCategories(t *testing.T) {
 	project := testProject(t)
 
-	expectedOutput := `occurences linter   issue                
-2          deadcode <identif....s unused 
+	expectedOutput := `occurrences linter   issue                
+2           deadcode <identif....s unused 
 `
 
 	maxIssueTextWidth = 20
