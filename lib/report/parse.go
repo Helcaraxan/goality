@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -293,76 +293,6 @@ func (p *parser) runLint(cliArgs []string, path string) (bool, error) {
 	return false, nil
 }
 
-func (p *parser) runManagedLint(cliArgs []string) ([]byte, bool, error) {
-	if p.memoryMonitor == nil {
-		p.memoryMonitor = systemMemoryMonitor
-	}
-	var interrupted bool
-
-	lintCmd := exec.Command("golangci-lint", cliArgs...)
-	output, errs := &bytes.Buffer{}, &strings.Builder{}
-	lintCmd.Stdout, lintCmd.Stderr = output, errs
-	lintCmd.Dir = p.project.Path
-
-	done, interrupt := make(chan struct{}), make(chan struct{})
-	wg := sync.WaitGroup{}
-	wg.Add(2)
-	go p.memoryMonitor(p.logger, &wg, done, interrupt)
-
-	if err := lintCmd.Start(); err != nil {
-		p.logger.WithError(err).Error("Unable to run linter.")
-		return nil, false, err
-	}
-	go func() {
-		select {
-		case <-interrupt:
-			interruptErr := lintCmd.Process.Signal(os.Kill)
-			if interruptErr != nil {
-				if strings.Contains(interruptErr.Error(), "process already finished") {
-					return
-				}
-				p.logger.WithError(interruptErr).Error("Failed to interrupt linter with a KILL signal.")
-			}
-			interrupted = true
-		case <-done:
-		}
-		wg.Done()
-	}()
-
-	err := lintCmd.Wait()
-	close(done)
-	wg.Wait()
-
-	if err != nil && !interrupted {
-		p.logger.WithError(err).Errorf("Linter exited with an error. Output was:\n%s Error was:\n%s", output.Bytes(), errs.String())
-		return nil, false, err
-	}
-	return output.Bytes(), interrupted, nil
-}
-
-func systemMemoryMonitor(logger *logrus.Logger, wg *sync.WaitGroup, done chan struct{}, interrupt chan struct{}) {
-	defer wg.Done()
-	defer close(interrupt)
-	for {
-		select {
-		case <-done:
-			return
-		case <-time.After(1 * time.Second):
-		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-		memStat, err := mem.VirtualMemoryWithContext(ctx)
-		cancel()
-		if err != nil {
-			logger.WithError(err).Debugf("Failed to retrieve memory usage.")
-		}
-		logger.Debugf("Memory usage: %.2f%%.", memStat.UsedPercent)
-		if memStat.UsedPercent > 90.0 {
-			return
-		}
-	}
-}
-
 var locCounterBufferSize = 32 * 1024
 
 func locCounter(r io.Reader) (int, error) {
@@ -394,6 +324,63 @@ func locCounter(r io.Reader) (int, error) {
 
 		if err == io.EOF {
 			return count, nil
+		}
+	}
+}
+
+// The default method of monitoring memory usage uses a non-trivial strategy in order to satisfy the
+// particular case of running 'golangci-lint', as well as doing so on varying platforms.
+//
+// 1. Running linters should be quick and not rely on swap space as that would slow down things
+//    considerably. Instead we should exit and rerun the linter on a smaller set of packages.
+// 2. Running linters should not result in the machine running out of memory in order to preserve
+//    responsiveness of any user interface.
+//
+// We achieve this by:
+// - Taking a base-line of the swap memory that is being used and updating it whenever it decreases.
+// - Adding any usage of swap over the base-line amount to the amount of virtual memory used.
+// - Interrupting as soon as the overall memory usage (virtual memory & swap above base-line) passes
+//   above 90% of the available amount of virtual memory.
+//
+// In particular, we cannot rely on the `UsedPercent` fields available in both the
+// `VirtualMemoryStat` and `SwapMemoryStat` types. In the case of Darwin / OSX swap is dynamically
+// allocated, grown and shrunk by the operating system, resulting in the reported percentage not
+// reflecting the amount of data that is actually being held in swap.
+func systemMemoryMonitor(logger *logrus.Logger, wg *sync.WaitGroup, done chan struct{}, interrupt chan struct{}) {
+	defer wg.Done()
+	defer close(interrupt)
+
+	var swapUsedBase uint64 = math.MaxUint64
+	for {
+		select {
+		case <-done:
+			return
+		case <-time.After(1 * time.Second):
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		memStat, err := mem.VirtualMemoryWithContext(ctx)
+		cancel()
+		if err != nil {
+			logger.WithError(err).Debugf("Failed to retrieve memory usage.")
+		}
+		ctx, cancel = context.WithTimeout(context.Background(), 100*time.Millisecond)
+		swapStat, err := mem.SwapMemoryWithContext(ctx)
+		cancel()
+		if err != nil {
+			logger.WithError(err).Debugf("Failed to retrieve swap usage.")
+		}
+
+		var swapUsed uint64
+		if swapStat.Used < swapUsedBase {
+			swapUsedBase = swapStat.Used
+		} else {
+			swapUsed = swapStat.Used - swapUsedBase
+		}
+		usedPercent := float64(memStat.Used+swapUsed) / float64(memStat.Total)
+		logger.Debugf("Memory usage: %.2f%%.", usedPercent*100)
+		if usedPercent > 0.9 {
+			return
 		}
 	}
 }
