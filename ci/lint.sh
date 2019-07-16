@@ -20,7 +20,7 @@ fi
 ## golangci-lint
 if [[ -z "$(command -v golangci-lint)" ]] || ! grep "${GOLANGCI_VERSION}" <<<"$(golangci-lint --version)"; then
 	echo "Downloading golangci-lint@${GOLANGCI_VERSION}."
-	curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | BINARY="golang-ci" bash -s -- -b "${GOPATH}/bin" "${GOLANGCI_VERSION}"
+	curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | BINARY="golang-ci" bash -s -- -b "${GOPATH}/bin" "v${GOLANGCI_VERSION}"
 else
 	echo "Found installed golangci-lint@${GOLANGCI_VERSION}."
 fi
