@@ -75,6 +75,7 @@ func testProject(t *testing.T) *report.Project {
 			logger,
 			testProjectPath,
 			report.WithLinters("deadcode", "unused", "typecheck"),
+			report.WithExcludeDirs("my_exclude"),
 		)
 		require.NoError(t, err)
 	}

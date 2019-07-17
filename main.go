@@ -123,7 +123,7 @@ func executeRunCommand(args *runArgs) error {
 		args.projectPath,
 		report.WithConfig(args.config),
 		report.WithLinters(args.linters...),
-		report.WithExcludePaths(args.excludePaths...),
+		report.WithExcludeDirs(args.excludePaths...),
 	)
 	if err != nil {
 		return err

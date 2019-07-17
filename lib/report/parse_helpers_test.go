@@ -16,22 +16,12 @@ func Test_AggregateLintOpts(t *testing.T) {
 
 	var (
 		lintOptsA = &LintOpts{}
-		lintOptsB = &LintOpts{linters: []string{"mylinter"}}
-		lintOptsC = &LintOpts{
-			linters: []string{
-				"mylinter",
-				"mystaticanalysis",
-			},
-		}
-		lintOptsD = &LintOpts{configPath: filepath.Join(cwd, "testdata", "project", ".golangci.yaml")}
-		lintOptsE = &LintOpts{configPath: "bar.yaml"}
-		lintOptsF = &LintOpts{excludePaths: []string{"vendor"}}
-		lintOptsG = &LintOpts{
-			excludePaths: []string{
-				"mocks",
-				"vendor",
-			},
-		}
+		lintOptsB = WithLinters("mylinter")
+		lintOptsC = WithLinters("mylinter", "mystaticanalysis")
+		lintOptsD = WithConfig(filepath.Join(cwd, "testdata", "project", ".golangci.yaml"))
+		lintOptsE = WithConfig("bar.yaml")
+		lintOptsF = WithExcludeDirs("vendor")
+		lintOptsG = WithExcludeDirs("mocks", "vendor")
 	)
 
 	testcases := map[string]struct {
@@ -39,20 +29,53 @@ func Test_AggregateLintOpts(t *testing.T) {
 		expectedErr   bool
 		expectedValue *LintOpts
 	}{
-		"NoOpts": {expectedValue: &LintOpts{}},
+		"NoOpts": {expectedValue: &LintOpts{excludeDirs: map[string]struct{}{
+			"builtin":     {},
+			"examples":    {},
+			"Godeps":      {},
+			"testdata":    {},
+			"third_party": {},
+			"vendor":      {},
+		}}},
 		"LintersOnly": {
-			lintOpts:      []*LintOpts{lintOptsA, lintOptsB, lintOptsC},
-			expectedValue: &LintOpts{linters: []string{"mylinter", "mystaticanalysis"}},
+			lintOpts: []*LintOpts{lintOptsA, lintOptsB, lintOptsC},
+			expectedValue: &LintOpts{
+				linters: []string{"mylinter", "mystaticanalysis"},
+				excludeDirs: map[string]struct{}{
+					"builtin":     {},
+					"examples":    {},
+					"Godeps":      {},
+					"testdata":    {},
+					"third_party": {},
+					"vendor":      {},
+				},
+			},
 		},
 		"ExcludePathsOnly": {
-			lintOpts:      []*LintOpts{lintOptsF, lintOptsG},
-			expectedValue: &LintOpts{excludePaths: []string{"mocks", "vendor"}},
+			lintOpts: []*LintOpts{lintOptsF, lintOptsG},
+			expectedValue: &LintOpts{excludeDirs: map[string]struct{}{
+				"builtin":     {},
+				"examples":    {},
+				"Godeps":      {},
+				"mocks":       {},
+				"testdata":    {},
+				"third_party": {},
+				"vendor":      {},
+			}},
 		},
 		"OneConfig": {
 			lintOpts: []*LintOpts{lintOptsA, lintOptsD},
 			expectedValue: &LintOpts{
-				configPath:   lintOptsD.configPath,
-				excludePaths: []string{"my_exclude"},
+				configPath: lintOptsD.configPath,
+				excludeDirs: map[string]struct{}{
+					"builtin":     {},
+					"examples":    {},
+					"Godeps":      {},
+					"my_exclude":  {},
+					"testdata":    {},
+					"third_party": {},
+					"vendor":      {},
+				},
 			},
 		},
 		"TwoConfigs": {
@@ -62,9 +85,18 @@ func Test_AggregateLintOpts(t *testing.T) {
 		"MultiOptions": {
 			lintOpts: []*LintOpts{lintOptsA, lintOptsB, lintOptsC, lintOptsD, lintOptsF, lintOptsG},
 			expectedValue: &LintOpts{
-				linters:      []string{"mylinter", "mystaticanalysis"},
-				configPath:   lintOptsD.configPath,
-				excludePaths: []string{"mocks", "my_exclude", "vendor"},
+				linters:    []string{"mylinter", "mystaticanalysis"},
+				configPath: lintOptsD.configPath,
+				excludeDirs: map[string]struct{}{
+					"builtin":     {},
+					"examples":    {},
+					"Godeps":      {},
+					"mocks":       {},
+					"my_exclude":  {},
+					"testdata":    {},
+					"third_party": {},
+					"vendor":      {},
+				},
 			},
 		},
 	}
@@ -101,14 +133,14 @@ func Test_LintOptsToArgs(t *testing.T) {
 			expected: []string{"--no-config", "--disable-all", "--enable=mylinter,mystaticanalysis"},
 		},
 		"ExcludePathsOnly": {
-			lintOpts: &LintOpts{excludePaths: []string{"mocks", "vendor"}},
+			lintOpts: &LintOpts{excludeDirs: map[string]struct{}{"mocks": {}, "vendor": {}}},
 			expected: []string{"--no-config", "--skip-dirs=mocks,vendor"},
 		},
 		"MultiOptions": {
 			lintOpts: &LintOpts{
-				linters:      []string{"mystaticanalysis"},
-				configPath:   "foo.yaml",
-				excludePaths: []string{"vendor"},
+				linters:     []string{"mystaticanalysis"},
+				configPath:  "foo.yaml",
+				excludeDirs: map[string]struct{}{"vendor": {}},
 			},
 			expected: []string{"--config=foo.yaml", "--disable-all", "--enable=mystaticanalysis", "--skip-dirs=vendor"},
 		},
