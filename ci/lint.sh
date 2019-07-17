@@ -8,7 +8,9 @@ if [[ "$(uname -s)" != "Linux" ]]; then
 fi
 
 # Check linter versions are specified.
-if [[ -z ${GOLANGCI_VERSION-} ]]; then
+GOLANGCI_VERSION="${GOLANGCI_VERSION:-"1.17.1"}"
+SHELLCHECK_VERSION="${SHELLCHECK_VERSION:-"0.6.0"}"
+if [[ -z ${GOLANGCI_VERSION} ]]; then
 	echo "Please specify the 'golangci-lint' version that should be used via the 'GOLANGCI_VERSION' environment variable."
 	exit 1
 elif [[ -z ${SHELLCHECK_VERSION} ]]; then

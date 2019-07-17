@@ -8,7 +8,8 @@ if [[ "$(uname -s)" != "Linux" && "$(uname -s)" != "Darwin" ]]; then
 fi
 
 # Ensure 'golangci-lint' is available with the expected version on the PATH.
-if [[ -z ${GOLANGCI_VERSION-} ]]; then
+GOLANGCI_VERSION="${GOLANGCI_VERSION:="1.17.1"}"
+if [[ -z ${GOLANGCI_VERSION} ]]; then
 	echo "Please specify the 'golangci-lint' version that should be used via the 'GOLANGCI_VERSION' environment variable."
 	exit 1
 fi
@@ -23,3 +24,11 @@ fi
 # Run all the Go tests with the race detector and generate coverage.
 printf "\nRunning Go test...\n"
 go test -v -race -coverprofile c.out ./...
+
+# Ensure the binary builds on all platforms.
+echo "Testing Linux build."
+GOOS="linux" GOARCH="amd64" go build -o goality_linux .
+echo "Testing Darwin build."
+GOOS="darwin" GOARCH="amd64" go build -o goality_darwin .
+echo "Testing Windows build."
+GOOS="windows" GOARCH="amd64" go build -o goality_windows.exe .
