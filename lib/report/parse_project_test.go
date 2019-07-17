@@ -12,7 +12,10 @@ import (
 )
 
 func Test_Parse(t *testing.T) {
-	parser := &parser{logger: logrus.New()}
+	parser := &parser{
+		logger: logrus.New(),
+		opts:   &LintOpts{excludePaths: []string{"my_exclude"}},
+	}
 
 	err := parser.parse(filepath.Join("testdata", "project"))
 	require.NoError(t, err, "Must be able to parse the project without errors.")
@@ -26,7 +29,7 @@ func Test_Lint(t *testing.T) {
 	parser := &parser{
 		logger:  logrus.New(),
 		project: createParsedProject(),
-		opts:    WithConfig(filepath.Join(cwd, "testdata", "project", ".golangci.yaml")),
+		opts:    &LintOpts{configPath: filepath.Join(cwd, "testdata", "project", ".golangci.yaml")},
 	}
 
 	err = parser.lint()
@@ -53,7 +56,7 @@ func Test_ResourceAwareness(t *testing.T) {
 	parser := &parser{
 		logger:        logrus.New(),
 		project:       createParsedProject(),
-		opts:          WithConfig(filepath.Join(cwd, "testdata", "project", ".golangci.yaml")),
+		opts:          &LintOpts{configPath: filepath.Join(cwd, "testdata", "project", ".golangci.yaml")},
 		memoryMonitor: testingMemoryMonitor,
 	}
 

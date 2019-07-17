@@ -15,6 +15,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golangci/golangci-lint/pkg/config"
+	"github.com/golangci/golangci-lint/pkg/logutils"
 	"github.com/golangci/golangci-lint/pkg/report"
 	"github.com/golangci/golangci-lint/pkg/result"
 	"github.com/shirou/gopsutil/mem"
@@ -51,8 +53,9 @@ func Parse(logger *logrus.Logger, path string, opts ...*LintOpts) (*Project, err
 }
 
 type LintOpts struct {
-	linters    []string
-	configPath string
+	linters      []string
+	configPath   string
+	excludePaths []string
 }
 
 func WithLinters(linters ...string) *LintOpts {
@@ -63,32 +66,63 @@ func WithConfig(configFilePath string) *LintOpts {
 	return &LintOpts{configPath: configFilePath}
 }
 
+func WithExcludePaths(excludePaths ...string) *LintOpts {
+	return &LintOpts{excludePaths: excludePaths}
+}
+
 func aggregateLintOpts(opts ...*LintOpts) (*LintOpts, error) {
-	var configPaths, linters []string
+	var configPaths, excludePaths, linters []string
 	for _, opt := range opts {
 		linters = append(linters, opt.linters...)
+		excludePaths = append(excludePaths, opt.excludePaths...)
 		if opt.configPath != "" {
 			configPaths = append(configPaths, opt.configPath)
 		}
 	}
 	if len(configPaths) > 1 {
 		return nil, fmt.Errorf("conflicting options: multiple configuration files were specified: %v", configPaths)
+	} else if len(configPaths) == 1 {
+		skipDirs, err := retrieveExcludePathsFromConfig(configPaths[0])
+		if err != nil {
+			return nil, err
+		}
+		excludePaths = append(excludePaths, skipDirs...)
 	}
 
 	aggregate := &LintOpts{}
 
-	var lastLinter string
+	var lastExcludePath, lastLinter string
 	sort.Strings(linters)
-	for _, linter := range linters {
-		if linter != lastLinter {
-			aggregate.linters = append(aggregate.linters, linter)
-			lastLinter = linter
+	for idx := range linters {
+		if linters[idx] != lastLinter {
+			aggregate.linters = append(aggregate.linters, linters[idx])
+			lastLinter = linters[idx]
+		}
+	}
+	sort.Strings(excludePaths)
+	for idx := range excludePaths {
+		if excludePaths[idx] != lastExcludePath {
+			aggregate.excludePaths = append(aggregate.excludePaths, excludePaths[idx])
+			lastExcludePath = excludePaths[idx]
 		}
 	}
 	if len(configPaths) == 1 {
 		aggregate.configPath = configPaths[0]
 	}
 	return aggregate, nil
+}
+
+func retrieveExcludePathsFromConfig(configPath string) ([]string, error) {
+	fakeConfig := config.Config{Run: config.Run{Config: configPath}}
+	fakeLogger := logutils.NewStderrLog("config-parser")
+	fakeLogger.SetLevel(logutils.LogLevelError)
+
+	parsedConfig := config.Config{}
+	configReader := config.NewFileReader(&parsedConfig, &fakeConfig, fakeLogger)
+	if err := configReader.Read(); err != nil {
+		return nil, fmt.Errorf("failed to read or parse config from '%s': %v", configPath, err)
+	}
+	return parsedConfig.Run.SkipDirs, nil
 }
 
 func (o *LintOpts) toArgs() []string {
@@ -101,6 +135,10 @@ func (o *LintOpts) toArgs() []string {
 
 	if len(o.linters) > 0 {
 		args = append(args, "--disable-all", "--enable="+strings.Join(o.linters, ","))
+	}
+
+	if len(o.excludePaths) > 0 {
+		args = append(args, "--skip-dirs="+strings.Join(o.excludePaths, ","))
 	}
 	return args
 }
@@ -154,6 +192,9 @@ func (p *parser) parseDirectory(path string) (*Directory, error) {
 	excludedDirNames := map[string]struct{}{
 		"mocks":  {},
 		"vendor": {},
+	}
+	for idx := range p.opts.excludePaths {
+		excludedDirNames[p.opts.excludePaths[idx]] = struct{}{}
 	}
 
 	dir, err := os.Open(path)
@@ -237,7 +278,7 @@ func (p *parser) lint() error {
 			continue
 		}
 
-		interrupted, err := p.runLint(cliArgs, current.Path+"/...")
+		interrupted, err := p.runLinter(cliArgs, current.Path+"/...")
 		if err != nil {
 			return err
 		} else if !interrupted {
@@ -246,7 +287,7 @@ func (p *parser) lint() error {
 
 		p.logger.Debugf("Spreading lint effort for '%s' over sub-directories.", current.Path)
 		if current.hasFiles(false) {
-			if _, err = p.runLint(cliArgs, current.Path); err != nil {
+			if _, err = p.runLinter(cliArgs, current.Path); err != nil {
 				return err
 			}
 		}
@@ -257,9 +298,9 @@ func (p *parser) lint() error {
 	return nil
 }
 
-func (p *parser) runLint(cliArgs []string, path string) (bool, error) {
+func (p *parser) runLinter(cliArgs []string, path string) (bool, error) {
 	p.logger.Debugf("Running linter on '%s'.", path)
-	output, interrupted, err := p.runManagedLint(append(cliArgs, path))
+	output, interrupted, err := p.runManagedLinter(append(cliArgs, path))
 	if interrupted {
 		p.logger.Debugf("Linter run was interrupted due to resource constraints.")
 		return true, nil

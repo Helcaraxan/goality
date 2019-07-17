@@ -13,7 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func (p *parser) runManagedLint(cliArgs []string) ([]byte, bool, error) {
+func (p *parser) runManagedLinter(cliArgs []string) ([]byte, bool, error) {
 	if p.memoryMonitor == nil {
 		p.memoryMonitor = systemMemoryMonitor
 	}

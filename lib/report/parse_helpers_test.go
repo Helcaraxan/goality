@@ -1,13 +1,19 @@
 package report
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_AggregateLintOpts(t *testing.T) {
+	cwd, err := os.Getwd()
+	require.NoError(t, err, "Must be able to determine the current directory.")
+
 	var (
 		lintOptsA = &LintOpts{}
 		lintOptsB = &LintOpts{linters: []string{"mylinter"}}
@@ -17,8 +23,15 @@ func Test_AggregateLintOpts(t *testing.T) {
 				"mystaticanalysis",
 			},
 		}
-		lintOptsD = &LintOpts{configPath: "foo.yaml"}
+		lintOptsD = &LintOpts{configPath: filepath.Join(cwd, "testdata", "project", ".golangci.yaml")}
 		lintOptsE = &LintOpts{configPath: "bar.yaml"}
+		lintOptsF = &LintOpts{excludePaths: []string{"vendor"}}
+		lintOptsG = &LintOpts{
+			excludePaths: []string{
+				"mocks",
+				"vendor",
+			},
+		}
 	)
 
 	testcases := map[string]struct {
@@ -31,19 +44,27 @@ func Test_AggregateLintOpts(t *testing.T) {
 			lintOpts:      []*LintOpts{lintOptsA, lintOptsB, lintOptsC},
 			expectedValue: &LintOpts{linters: []string{"mylinter", "mystaticanalysis"}},
 		},
+		"ExcludePathsOnly": {
+			lintOpts:      []*LintOpts{lintOptsF, lintOptsG},
+			expectedValue: &LintOpts{excludePaths: []string{"mocks", "vendor"}},
+		},
 		"OneConfig": {
-			lintOpts:      []*LintOpts{lintOptsA, lintOptsD},
-			expectedValue: lintOptsD,
+			lintOpts: []*LintOpts{lintOptsA, lintOptsD},
+			expectedValue: &LintOpts{
+				configPath:   lintOptsD.configPath,
+				excludePaths: []string{"my_exclude"},
+			},
 		},
 		"TwoConfigs": {
 			lintOpts:    []*LintOpts{lintOptsA, lintOptsD, lintOptsE},
 			expectedErr: true,
 		},
-		"LintersAndConfig": {
-			lintOpts: []*LintOpts{lintOptsA, lintOptsB, lintOptsC, lintOptsE},
+		"MultiOptions": {
+			lintOpts: []*LintOpts{lintOptsA, lintOptsB, lintOptsC, lintOptsD, lintOptsF, lintOptsG},
 			expectedValue: &LintOpts{
-				linters:    []string{"mylinter", "mystaticanalysis"},
-				configPath: "bar.yaml",
+				linters:      []string{"mylinter", "mystaticanalysis"},
+				configPath:   lintOptsD.configPath,
+				excludePaths: []string{"mocks", "my_exclude", "vendor"},
 			},
 		},
 	}
@@ -79,12 +100,17 @@ func Test_LintOptsToArgs(t *testing.T) {
 			lintOpts: &LintOpts{linters: []string{"mylinter", "mystaticanalysis"}},
 			expected: []string{"--no-config", "--disable-all", "--enable=mylinter,mystaticanalysis"},
 		},
-		"ConfigAndLinters": {
+		"ExcludePathsOnly": {
+			lintOpts: &LintOpts{excludePaths: []string{"mocks", "vendor"}},
+			expected: []string{"--no-config", "--skip-dirs=mocks,vendor"},
+		},
+		"MultiOptions": {
 			lintOpts: &LintOpts{
-				linters:    []string{"mystaticanalysis"},
-				configPath: "foo.yaml",
+				linters:      []string{"mystaticanalysis"},
+				configPath:   "foo.yaml",
+				excludePaths: []string{"vendor"},
 			},
-			expected: []string{"--config=foo.yaml", "--disable-all", "--enable=mystaticanalysis"},
+			expected: []string{"--config=foo.yaml", "--disable-all", "--enable=mystaticanalysis", "--skip-dirs=vendor"},
 		},
 	}
 

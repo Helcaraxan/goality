@@ -1,6 +1,10 @@
 # For full documentation of the configuration options please
 # see: https://github.com/golangci/golangci-lint#config-file.
 
+run:
+  skip-dirs:
+    - my_exclude
+
 # linters that we should / shouldn't run
 linters:
   disable-all: true

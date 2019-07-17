@@ -54,10 +54,11 @@ type runArgs struct {
 
 	projectPath string
 
-	config  string
-	linters []string
-	depth   int
-	paths   []string
+	config       string
+	excludePaths []string
+	linters      []string
+	depth        int
+	paths        []string
 }
 
 func initRunCommand(commonArgs *commonArgs) *cobra.Command {
@@ -85,6 +86,7 @@ Example:
 	}
 
 	cmd.Flags().StringVarP(&cArgs.config, "config", "c", "", "Path to a golangci-lint configuration file that should be used.")
+	cmd.Flags().StringSliceVarP(&cArgs.excludePaths, "excludes", "e", nil, "Names of directories that should be skipped.")
 	cmd.Flags().StringSliceVarP(&cArgs.linters, "linters", "l", nil, "Specific linters to run.")
 	cmd.Flags().IntVarP(&cArgs.depth, "depth", "d", -1, "Path granularity at which to perform the quality analysis.")
 	cmd.Flags().StringSliceVarP(&cArgs.paths, "paths", "p", nil, "Specific paths for which to provide aggregate quality analysis results.")
@@ -116,7 +118,13 @@ func executeRunCommand(args *runArgs) error {
 		}
 	}
 
-	project, err := report.Parse(args.logger, args.projectPath, report.WithConfig(args.config), report.WithLinters(args.linters...))
+	project, err := report.Parse(
+		args.logger,
+		args.projectPath,
+		report.WithConfig(args.config),
+		report.WithLinters(args.linters...),
+		report.WithExcludePaths(args.excludePaths...),
+	)
 	if err != nil {
 		return err
 	}
