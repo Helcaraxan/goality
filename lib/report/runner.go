@@ -2,10 +2,12 @@ package report
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 	"sync"
 	"time"
 
@@ -40,11 +42,11 @@ func (r *runner) run() (bool, error) {
 	signal.Notify(sigs, r.getInterruptSignals()...)
 	go r.signalHandler(sigs)
 
-	done, interrupt := make(chan struct{}), make(chan struct{})
+	done, kill := make(chan struct{}), make(chan struct{})
 	wg := sync.WaitGroup{}
 	wg.Add(2)
-	go r.statusMonitor(&wg, done, interrupt)
-	go r.memoryMonitorFunc(r.logger, &wg, done, interrupt)
+	go r.statusMonitor(&wg, done, kill)
+	go r.memoryMonitorFunc(r.logger, &wg, done, kill)
 
 	r.killLock.Lock()
 	if r.interrupted {
@@ -63,23 +65,30 @@ func (r *runner) run() (bool, error) {
 	close(sigs)
 	wg.Wait()
 
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "killed") {
 		return false, err
 	}
 	return r.interrupted, nil
 }
 
-func (r *runner) statusMonitor(wg *sync.WaitGroup, done chan struct{}, interrupt chan struct{}) {
+func (r *runner) statusMonitor(wg *sync.WaitGroup, done chan struct{}, kill chan struct{}) {
 	defer wg.Done()
+
+	// The 'kill' channel will always be closed and tell that the time has come for clean-up. The
+	// status of the 'done' channel, which is only closed once the process has exited, will indicate
+	// whether we should actually kill the process or not.
+	<-kill
 	select {
-	case <-interrupt:
+	case <-done:
+		// Don't do anything. The process has already exited.
+	default:
+		// Kill the process as it hasn't exited yet.
 		r.killLock.Lock()
 		r.logger.Info("Killing linter due to memory usage.")
 		r.killLinterProcess()
 		r.logger.Info("Killed.")
 		r.interrupted = true
 		r.killLock.Unlock()
-	case <-done:
 	}
 }
 
@@ -87,6 +96,8 @@ func (r *runner) signalHandler(sigs chan os.Signal) {
 	// Always unregister the signal handlers on exit.
 	defer signal.Reset()
 
+	// A kill request corresponds to a token being received whereas a simple "done" signal is
+	// transmitted via the closing of the channel by the main goroutine.
 	if _, ok := <-sigs; ok {
 		r.killLock.Lock()
 		r.killLinterProcess()
@@ -112,11 +123,11 @@ func (r *runner) signalHandler(sigs chan os.Signal) {
 // `VirtualMemoryStat` and `SwapMemoryStat` types. In the case of Darwin / OSX swap is dynamically
 // allocated, grown and shrunk by the operating system, resulting in the reported percentage not
 // reflecting the amount of data that is actually being held in swap.
-func systemMemoryMonitor(logger *logrus.Logger, wg *sync.WaitGroup, done chan struct{}, interrupt chan struct{}) {
+func systemMemoryMonitor(logger *logrus.Logger, wg *sync.WaitGroup, done chan struct{}, kill chan struct{}) {
 	defer wg.Done()
-	defer close(interrupt)
+	defer close(kill)
 
-	var swapUsedBase uint64 = math.MaxUint64
+	var swapUsedBaseline uint64 = math.MaxUint64
 	for {
 		select {
 		case <-done:
@@ -138,15 +149,34 @@ func systemMemoryMonitor(logger *logrus.Logger, wg *sync.WaitGroup, done chan st
 		}
 
 		var swapUsed uint64
-		if swapStat.Used < swapUsedBase {
-			swapUsedBase = swapStat.Used
+		if swapStat.Used < swapUsedBaseline {
+			swapUsedBaseline = swapStat.Used
 		} else {
-			swapUsed = swapStat.Used - swapUsedBase
+			swapUsed = swapStat.Used - swapUsedBaseline
 		}
-		usedPercent := float64(memStat.Used+swapUsed) / float64(memStat.Total)
-		logger.Debugf("Memory usage: %.2f%%.", usedPercent*100)
-		if usedPercent > 0.9 {
+		used := float64(memStat.Used+swapUsed) / float64(memStat.Total)
+		logger.Debugf(
+			"Memory usage: %.2f%% - RAM %s / Swap %s.",
+			used*100,
+			humanBytes(memStat.Used),
+			humanBytes(swapUsed),
+		)
+		if used > 0.9 {
 			return
 		}
 	}
+}
+
+// Simple utility function to print out memory sizes in human readable format.
+func humanBytes(byteCount uint64) string {
+	const unit = 1024
+	if byteCount < unit {
+		return fmt.Sprintf("%d B", byteCount)
+	}
+	div, exp := int64(unit), 0
+	for n := byteCount / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %ciB", float64(byteCount)/float64(div), "KMGTPE"[exp])
 }
