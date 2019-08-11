@@ -7,17 +7,24 @@ if [[ "$(uname -s)" != "Linux" ]]; then
 	exit 1
 fi
 
+PROJECT_ROOT="$(dirname "${BASH_SOURCE[0]}")/.."
+cd "${PROJECT_ROOT}"
+
 # Ensure linter versions are specified or set the default values.
 GOLANGCI_VERSION="${GOLANGCI_VERSION:-"1.17.1"}"
 MARKDOWNLINT_VERSION="${MARKDOWNLINT_VERSION:-"0.5.0"}"
 SHELLCHECK_VERSION="${SHELLCHECK_VERSION:-"0.7.0"}"
 SHFMT_VERSION="${SHFMT_VERSION:-"2.6.4"}"
+YAMLLINT_VERSION="${YAMLLINT_VERSION:-"1.10.0"}"
 
 # Retrieve linters if necessary.
+mkdir -p "${PWD}/bin"
+PATH="${PATH}:${PWD}/bin"
+
 ## golangci-lint
 if [[ -z "$(command -v golangci-lint)" ]] || ! grep "${GOLANGCI_VERSION}" <<<"$(golangci-lint --version)"; then
 	echo "Installing golangci-lint@${GOLANGCI_VERSION}."
-	curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | BINARY="golang-ci" bash -s -- -b "${GOPATH}/bin" "v${GOLANGCI_VERSION}"
+	curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | BINARY="golang-ci" bash -s -- -b "${PWD}/bin" "v${GOLANGCI_VERSION}"
 else
 	echo "Found installed golangci-lint@${GOLANGCI_VERSION}."
 fi
@@ -25,8 +32,8 @@ fi
 ## shellcheck
 if [[ -z "$(command -v shellcheck)" ]] || ! grep "${SHELLCHECK_VERSION}" <<<"$(shellcheck --version)"; then
 	echo "Installing shellcheck@${SHELLCHECK_VERSION}."
-	curl -sfL "https://storage.googleapis.com/shellcheck/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz" | tar -xJv
-	PATH="${PWD}/shellcheck-v${SHELLCHECK_VERSION}:${PATH}"
+	curl -sfL "https://storage.googleapis.com/shellcheck/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz" |
+		tar -xJv --strip-components=1 --directory="${PWD}/bin"
 else
 	echo "Found installed shellcheck@${SHELLCHECK_VERSION}."
 fi
@@ -34,8 +41,7 @@ fi
 # shfmt
 if [[ -z "$(command -v shfmt)" ]] || ! grep "${SHFMT_VERSION}" <<<"$(shfmt -version)"; then
 	echo "Installing shfmt@${SHFMT_VERSION}."
-	go get -u "mvdan.cc/sh/cmd/shfmt@v${SHFMT_VERSION}"
-	PATH="${GOPATH}/bin:${PATH}"
+	GOBIN="${PWD}/bin" go install "mvdan.cc/sh/cmd/shfmt"
 else
 	echo "Found installed shfmt@${SHFMT_VERSION}."
 fi
@@ -44,15 +50,29 @@ fi
 if [[ -z "$(command -v mdl)" ]] || ! grep "${MARKDOWNLINT_VERSION}" <<<"$(mdl --version)"; then
 	echo "Installing mdl@${MARKDOWNLINT_VERSION}."
 	gem install mdl -v "${MARKDOWNLINT_VERSION}"
-	GEM_INSTALL_DIR="$(gem environment | grep -E -e "- INSTALLATION DIRECTORY" | sed -E 's/.* ([:print:]+)$/\1/')/bin"
+	GEM_INSTALL_DIR="$(gem environment | grep -E -e "- INSTALLATION DIRECTORY" | sed -E 's/.* ([[:print:]]+)$/\1/')/bin"
 	PATH="${PATH}:${GEM_INSTALL_DIR}"
 else
 	echo "Found installed mdl@${MARKDOWNLINT_VERSION}."
 fi
 
+## yamllint
+if [[ -z "$(command -v yamllint)" ]]; then
+	echo "Could not find yamllint@${YAMLLINT_VERSION}. Please install it manually."
+	exit 1
+elif ! grep "${YAMLLINT_VERSION}" <<<"$(yamllint --version)"; then
+	echo "WARNING - yamllint found at non-default version '$(yamllint --version)'. Results might differ."
+else
+	echo "Found installed yamllint@${YAMLLINT_VERSION}."
+fi
+
 # Run linters.
 echo "Ensuring that generated Go code is being kept up to date."
 go generate ./...
+git diff --exit-code --quiet || (
+	echo "Please run 'go generate ./...' to update the generated Go code."
+	false
+)
 
 echo "Linting Go source code."
 golangci-lint run ./...
@@ -63,6 +83,9 @@ git diff --exit-code --quiet || (
 	echo "Please run 'go mod tidy' to clean up the 'go.mod' and 'go.sum' files."
 	false
 )
+
+echo "Linting YAML files."
+yamllint --strict --config-file=./.yamllint.yaml .
 
 echo "Performing a static analysis of Bash scripts."
 shell_failure=0
