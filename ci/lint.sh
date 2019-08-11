@@ -9,9 +9,9 @@ fi
 
 # Ensure linter versions are specified or set the default values.
 GOLANGCI_VERSION="${GOLANGCI_VERSION:-"1.17.1"}"
-SHELLCHECK_VERSION="${SHELLCHECK_VERSION:-"0.6.0"}"
-SHFMT_VERSION="${SHFMT_VERSION:-"2.6.4"}"
 MARKDOWNLINT_VERSION="${MARKDOWNLINT_VERSION:-"0.5.0"}"
+SHELLCHECK_VERSION="${SHELLCHECK_VERSION:-"0.7.0"}"
+SHFMT_VERSION="${SHFMT_VERSION:-"2.6.4"}"
 
 # Retrieve linters if necessary.
 ## golangci-lint
