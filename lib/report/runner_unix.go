@@ -16,6 +16,7 @@ func newRunner(logger *logrus.Logger, cliArgs []string) *runner {
 	// We need to request a dedicated process group ID to be assigned so that we can cleanly kill
 	// the entire process tree if necessary.
 	lintCmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
 	return &runner{
 		logger: logger,
 		cmd:    lintCmd,
@@ -40,6 +41,7 @@ func (r *runner) killLinterProcess() {
 		if !strings.Contains(err.Error(), "no such process") {
 			r.logger.WithError(err).Errorf("Failed to get process group of linter child-process %d.", r.cmd.Process.Pid)
 		}
+
 		return
 	}
 

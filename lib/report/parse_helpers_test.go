@@ -101,9 +101,11 @@ func Test_AggregateLintOpts(t *testing.T) {
 		},
 	}
 
-	for name, testcase := range testcases {
+	for name := range testcases {
+		testcase := testcases[name]
 		t.Run(name, func(t *testing.T) {
 			lintOpt, err := aggregateLintOpts(testcase.lintOpts...)
+
 			if testcase.expectedErr {
 				assert.Error(t, err)
 				assert.Nil(t, lintOpt)
@@ -146,7 +148,8 @@ func Test_LintOptsToArgs(t *testing.T) {
 		},
 	}
 
-	for name, testcase := range testcases {
+	for name := range testcases {
+		testcase := testcases[name]
 		t.Run(name, func(t *testing.T) {
 			cliArgs := testcase.lintOpts.toArgs()
 			assert.Equal(t, testcase.expected, cliArgs)

@@ -112,7 +112,8 @@ func Test_AggregateViewOpts(t *testing.T) {
 		},
 	}
 
-	for name, testcase := range testcases {
+	for name := range testcases {
+		testcase := testcases[name]
 		t.Run(name, func(t *testing.T) {
 			viewOpt := aggregateViewOpts(testcase.viewOpts...)
 			assert.Equal(t, testcase.expected, viewOpt, "Should have retrieved the expected aggregated ViewOpts.")

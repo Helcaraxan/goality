@@ -38,13 +38,16 @@ func (r *runner) run() (bool, error) {
 
 	// Register clean-up handlers so that we can clean up the running linter in
 	// the case of an process-level interruption.
-	sigs := make(chan os.Signal)
+	sigs := make(chan os.Signal, 1)
+
 	signal.Notify(sigs, r.getInterruptSignals()...)
+
 	go r.signalHandler(sigs)
 
 	done, kill := make(chan struct{}), make(chan struct{})
 	wg := sync.WaitGroup{}
 	wg.Add(2)
+
 	go r.statusMonitor(&wg, done, kill)
 	go r.memoryMonitorFunc(r.logger, &wg, done, kill)
 
@@ -52,15 +55,20 @@ func (r *runner) run() (bool, error) {
 	if r.interrupted {
 		return true, nil
 	}
+
 	if err := r.cmd.Start(); err != nil {
 		r.killLock.Unlock()
 		r.logger.WithError(err).Error("Unable to run linter.")
+
 		return false, err
 	}
+
 	r.started = true
+
 	r.killLock.Unlock()
 
 	err := r.cmd.Wait()
+
 	close(done)
 	close(sigs)
 	wg.Wait()
@@ -68,6 +76,7 @@ func (r *runner) run() (bool, error) {
 	if err != nil && !strings.Contains(err.Error(), "killed") {
 		return false, err
 	}
+
 	return r.interrupted, nil
 }
 
@@ -93,16 +102,17 @@ func (r *runner) statusMonitor(wg *sync.WaitGroup, done chan struct{}, kill chan
 }
 
 func (r *runner) signalHandler(sigs chan os.Signal) {
-	// Always unregister the signal handlers on exit.
-	defer signal.Reset()
-
 	// A kill request corresponds to a token being received whereas a simple "done" signal is
 	// transmitted via the closing of the channel by the main goroutine.
 	if _, ok := <-sigs; ok {
 		r.killLock.Lock()
 		r.killLinterProcess()
+
+		signal.Reset()
 		os.Exit(1)
 	}
+
+	signal.Reset()
 }
 
 // The default method of monitoring memory usage uses a non-trivial strategy in order to satisfy the
@@ -128,6 +138,7 @@ func systemMemoryMonitor(logger *logrus.Logger, wg *sync.WaitGroup, done chan st
 	defer close(kill)
 
 	var swapUsedBaseline uint64 = math.MaxUint64
+
 	for {
 		select {
 		case <-done:
@@ -137,23 +148,29 @@ func systemMemoryMonitor(logger *logrus.Logger, wg *sync.WaitGroup, done chan st
 
 		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 		memStat, err := mem.VirtualMemoryWithContext(ctx)
-		cancel()
+
 		if err != nil {
 			logger.WithError(err).Debugf("Failed to retrieve memory usage.")
 		}
+
+		cancel()
+
 		ctx, cancel = context.WithTimeout(context.Background(), 100*time.Millisecond)
 		swapStat, err := mem.SwapMemoryWithContext(ctx)
-		cancel()
+
 		if err != nil {
 			logger.WithError(err).Debugf("Failed to retrieve swap usage.")
 		}
 
-		var swapUsed uint64
+		cancel()
+
+		swapUsed := uint64(0)
 		if swapStat.Used < swapUsedBaseline {
-			swapUsedBaseline = swapStat.Used
+			swapUsed = swapStat.Used
 		} else {
 			swapUsed = swapStat.Used - swapUsedBaseline
 		}
+
 		used := float64(memStat.Used+swapUsed) / float64(memStat.Total)
 		logger.Debugf(
 			"Memory usage: %.2f%% - RAM %s / Swap %s.",
@@ -161,6 +178,7 @@ func systemMemoryMonitor(logger *logrus.Logger, wg *sync.WaitGroup, done chan st
 			humanBytes(memStat.Used),
 			humanBytes(swapUsed),
 		)
+
 		if used > 0.9 {
 			return
 		}
@@ -173,10 +191,12 @@ func humanBytes(byteCount uint64) string {
 	if byteCount < unit {
 		return fmt.Sprintf("%d B", byteCount)
 	}
+
 	div, exp := int64(unit), 0
 	for n := byteCount / unit; n >= unit; n /= unit {
 		div *= unit
 		exp++
 	}
+
 	return fmt.Sprintf("%.1f %ciB", float64(byteCount)/float64(div), "KMGTPE"[exp])
 }

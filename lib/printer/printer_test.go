@@ -69,8 +69,8 @@ func testProject(t *testing.T) *report.Project {
 
 		wd, err := os.Getwd()
 		require.NoError(t, err)
-		testProjectPath := filepath.Join(wd, "..", "report", "testdata", "project")
 
+		testProjectPath := filepath.Join(wd, "..", "report", "testdata", "project")
 		cachedProject, err = report.Parse(
 			logger,
 			testProjectPath,
@@ -79,5 +79,6 @@ func testProject(t *testing.T) *report.Project {
 		)
 		require.NoError(t, err)
 	}
+
 	return cachedProject
 }

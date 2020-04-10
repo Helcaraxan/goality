@@ -35,15 +35,20 @@ func (s *SubView) String() string {
 	sort.Strings(s.linters)
 
 	var issueCount int
+
 	for idx := range s.linters {
 		issues := s.Issues[s.linters[idx]]
-		var occurenceRate float32
+		occurenceRate := float32(0.0)
+
 		if len(issues) > 0 {
 			occurenceRate = float32(len(issues)) / float32(s.LineCount) * 1000
 		}
+
 		fmt.Fprintf(printer, "- %s: %.2f issues / 1k LoC\n", s.linters[idx], occurenceRate)
+
 		issueCount += len(issues)
 	}
+
 	fmt.Fprintf(printer, "\nTotal number of issues: %d\n", issueCount)
 
 	return printer.String()
@@ -97,6 +102,7 @@ func (p *Project) GenerateView(opts ...*ViewOpts) *View {
 	if opt.depth >= 0 || len(opt.paths) == 0 {
 		subViews = append(subViews, p.root.subViewDepth(opt.depth)...)
 	}
+
 	for _, path := range opt.paths {
 		subViews = append(subViews, p.SubView(path))
 	}
@@ -109,6 +115,7 @@ func (p *Project) GenerateView(opts ...*ViewOpts) *View {
 	for _, subView := range subViews {
 		view.SubViews[subView.Path] = subView
 	}
+
 	return view
 }
 
@@ -137,11 +144,13 @@ func (d *Directory) hasFiles(recursive bool) bool {
 	} else if !recursive {
 		return false
 	}
+
 	for _, subDirectory := range d.SubDirectories {
 		if subDirectory.hasFiles(true) {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -149,10 +158,12 @@ func (d *Directory) getDirectory(path []string) *Directory {
 	if len(path) == 0 || path[0] == "." {
 		return d
 	}
+
 	subDir, ok := d.SubDirectories[path[0]]
 	if !ok {
 		return nil
 	}
+
 	return subDir.getDirectory(path[1:])
 }
 
@@ -165,6 +176,7 @@ func (d *Directory) subViewDepth(depth int) []*SubView {
 	for _, subDir := range d.SubDirectories {
 		views = append(views, subDir.subViewDepth(depth-1)...)
 	}
+
 	return views
 }
 
@@ -179,8 +191,10 @@ func (d *Directory) subViewPath(path []string) *SubView {
 		if ok {
 			return file.subView()
 		}
+
 		return nil
 	}
+
 	return d.subViewRecursive()
 }
 
@@ -190,6 +204,7 @@ func (d *Directory) subViewRecursive() *SubView {
 		for _, d := range d.SubDirectories {
 			childReports = append(childReports, d.subViewRecursive())
 		}
+
 		d.recursiveView = fuse(childReports...)
 		d.recursiveView.Path = d.Path + "/..."
 		d.recursiveView.recursive = true
@@ -198,6 +213,7 @@ func (d *Directory) subViewRecursive() *SubView {
 			sort.Sort(sortableIssues(issues))
 		}
 	}
+
 	return d.recursiveView
 }
 
@@ -207,6 +223,7 @@ func (d *Directory) subViewSelf() *SubView {
 		for _, f := range d.Files {
 			childReports = append(childReports, f.subView())
 		}
+
 		d.selfView = fuse(childReports...)
 		d.selfView.Path = d.Path
 
@@ -214,6 +231,7 @@ func (d *Directory) subViewSelf() *SubView {
 			sort.Sort(sortableIssues(issues))
 		}
 	}
+
 	return d.selfView
 }
 
@@ -221,6 +239,7 @@ func (p *Project) addIssue(logger *logrus.Logger, issue *result.Issue) {
 	if p.root == nil {
 		p.root = &Directory{}
 	}
+
 	p.root.addIssue(logger, strings.Split(issue.FilePath(), string(os.PathSeparator)), issue)
 }
 
@@ -238,6 +257,7 @@ func (d *Directory) addIssue(logger *logrus.Logger, path []string, issue *result
 		file.addIssue(issue)
 		return
 	}
+
 	logger.Warnf("Entry %q for issue %+v does not exist in %q.", path[0], issue, d.Path)
 }
 
@@ -255,15 +275,19 @@ func (f *File) addIssue(issue *result.Issue) {
 
 func fuse(subViews ...*SubView) *SubView {
 	fused := &SubView{Issues: map[string][]*result.Issue{}}
+
 	for _, subView := range subViews {
 		if subView == nil {
 			continue
 		}
+
 		for linter, issues := range subView.Issues {
 			fused.Issues[linter] = append(fused.Issues[linter], issues...)
 		}
+
 		fused.LineCount += subView.LineCount
 	}
+
 	return fused
 }
 
@@ -271,15 +295,19 @@ func aggregateViewOpts(opts ...*ViewOpts) *ViewOpts {
 	aggregate := &ViewOpts{depth: -1}
 
 	var paths []string
+
 	for _, opt := range opts {
 		if opt.depth >= 0 {
 			aggregate.depth = opt.depth
 		}
+
 		paths = append(paths, opt.paths...)
 	}
+
 	sort.Strings(paths)
 
-	var lastPath string
+	lastPath := ""
+
 	for _, path := range paths {
 		if len(strings.Split(path, string(os.PathSeparator))) <= aggregate.depth {
 			continue
@@ -290,6 +318,7 @@ func aggregateViewOpts(opts ...*ViewOpts) *ViewOpts {
 			lastPath = path
 		}
 	}
+
 	return aggregate
 }
 

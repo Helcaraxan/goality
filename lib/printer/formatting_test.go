@@ -61,7 +61,8 @@ func Test_ValidateMatrix(t *testing.T) {
 		},
 	}
 
-	for name, testcase := range testcases {
+	for name := range testcases {
+		testcase := testcases[name]
 		t.Run(name, func(t *testing.T) {
 			columnCount, delineations, err := validateMatrix(testcase.headers, testcase.rows, testcase.ratios)
 			if !testcase.valid {
@@ -108,7 +109,8 @@ func Test_SplitRemainderAcrossColumns(t *testing.T) {
 		},
 	}
 
-	for name, testcase := range testcases {
+	for name := range testcases {
+		testcase := testcases[name]
 		t.Run(name, func(t *testing.T) {
 			splitRemainerAcrossColumns(testcase.remainder, testcase.columns)
 			assert.Equal(t, testcase.expectedColumns, testcase.columns)
@@ -184,7 +186,8 @@ func Test_ComputeDimensions(t *testing.T) {
 		},
 	}
 
-	for name, testcase := range testcases {
+	for name := range testcases {
+		testcase := testcases[name]
 		t.Run(name, func(t *testing.T) {
 			hWidths, cWidths, err := computeDimensions(testcase.headers, testcase.matrix, testcase.ratios)
 			require.NoError(t, err)

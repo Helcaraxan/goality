@@ -20,6 +20,7 @@ func (c IssueCategories) String() string {
 	for idx := range c {
 		output = append(output, c[idx].String())
 	}
+
 	return strings.Join(output, "\n")
 }
 
@@ -39,6 +40,7 @@ func IssueRanking(view *report.View, tolerance int) IssueCategories {
 	}
 
 	linterMap := map[string][]*IssueCategory{}
+
 	for _, subView := range view.SubViews {
 		for name, issues := range subView.Issues {
 			linterMap[name] = categorise(linterMap[name], issues, tolerance)
@@ -49,19 +51,23 @@ func IssueRanking(view *report.View, tolerance int) IssueCategories {
 	for _, categoryList := range linterMap {
 		categories = append(categories, categoryList...)
 	}
+
 	sort.Slice(categories, func(i int, j int) bool { return len(categories[i].Issues) > len(categories[j].Issues) })
+
 	return categories
 }
 
 func categorise(categories []*IssueCategory, issues []*result.Issue, tolerance int) IssueCategories {
 	for _, issue := range issues {
 		var categorised bool
+
 		for _, category := range categories {
 			if levenshtein.ComputeDistance(category.Representative, normalise(issue)) <= tolerance {
 				category.Issues = append(category.Issues, issue)
 				categorised = true
 			}
 		}
+
 		if !categorised {
 			categories = append(categories, &IssueCategory{
 				Linter:         issue.FromLinter,
@@ -70,6 +76,7 @@ func categorise(categories []*IssueCategory, issues []*result.Issue, tolerance i
 			})
 		}
 	}
+
 	return categories
 }
 
@@ -77,8 +84,10 @@ func categorise(categories []*IssueCategory, issues []*result.Issue, tolerance i
 // to be the personalised bits of issue messages.
 func normalise(issue *result.Issue) string {
 	representant := issue.Text
+
 	for _, quoteChar := range []string{"\"", "`", "'"} {
 		var parts []string
+
 		for idx, element := range strings.Split(representant, quoteChar) {
 			if idx%2 == 1 {
 				parts = append(parts, "<identifier>")
@@ -86,7 +95,9 @@ func normalise(issue *result.Issue) string {
 				parts = append(parts, element)
 			}
 		}
+
 		representant = strings.Join(parts, " ")
 	}
+
 	return representant
 }

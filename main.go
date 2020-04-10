@@ -22,6 +22,7 @@ func main() {
 	commonArgs := &commonArgs{logger: logrus.New()}
 
 	var verbose, quiet bool
+
 	rootCmd := &cobra.Command{
 		Use: "goality",
 		PersistentPreRun: func(_ *cobra.Command, _ []string) {
@@ -46,6 +47,7 @@ func main() {
 		commonArgs.logger.WithError(err).Debugf("Execution failed.")
 		os.Exit(1)
 	}
+
 	commonArgs.logger.Debug("Execution successful.")
 }
 
@@ -100,12 +102,15 @@ func executeRunCommand(args *runArgs) error {
 		args.logger.WithError(err).Error("Failed to determine the current working directory")
 		return err
 	}
+
 	if args.config != "" && !filepath.IsAbs(args.config) {
 		args.config = filepath.Join(cwd, args.config)
 	}
+
 	if !filepath.IsAbs(args.projectPath) {
 		args.projectPath = filepath.Join(cwd, args.projectPath)
 	}
+
 	for idx := range args.paths {
 		if filepath.IsAbs(args.paths[idx]) {
 			relPath, relErr := filepath.Rel(args.projectPath, args.paths[idx])
@@ -114,6 +119,7 @@ func executeRunCommand(args *runArgs) error {
 			} else if strings.HasPrefix(relPath, "../") {
 				return fmt.Errorf("specified path %q is outside of the targeted project at %q", args.paths[idx], args.projectPath)
 			}
+
 			args.paths[idx] = relPath
 		}
 	}
@@ -128,5 +134,6 @@ func executeRunCommand(args *runArgs) error {
 	if err != nil {
 		return err
 	}
+
 	return printer.PrintView(os.Stdout, project.GenerateView(report.WithDepth(args.depth), report.WithPaths(args.paths...)))
 }

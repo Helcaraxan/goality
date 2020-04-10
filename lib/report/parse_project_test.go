@@ -42,6 +42,7 @@ func Test_ResourceAwareness(t *testing.T) {
 
 	cwd, err := os.Getwd()
 	require.NoError(t, err, "Must be able to determine the current directory.")
+
 	project := createParsedProject()
 	linter := &linter{
 		logger:         logger,
@@ -59,6 +60,7 @@ var hasBeenInterrupted bool
 func testMemoryMonitor(logger *logrus.Logger, wg *sync.WaitGroup, done chan struct{}, interrupt chan struct{}) {
 	if !hasBeenInterrupted {
 		hasBeenInterrupted = true
+
 		close(interrupt)
 		wg.Done()
 	} else {

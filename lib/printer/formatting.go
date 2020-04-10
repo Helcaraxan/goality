@@ -19,7 +19,9 @@ func printTable(w io.Writer, headers []string, rows [][]string, headerToColumnRa
 	for idx := range rows {
 		output = append(output, printRow(rowTemplate, rows[idx]))
 	}
+
 	_, err = fmt.Fprintln(w, strings.Join(output, "\n"))
+
 	return err
 }
 
@@ -31,12 +33,16 @@ func computeDimensions(headers []string, rows [][]string, headerToColumnRatio []
 
 	columnWidths := []int{}
 	headerWidths := []int{}
+
 	for idx := range headers {
 		headerWidths = append(headerWidths, len(headers[idx]))
 	}
 
-	var groupWidth int
-	var headerIdx int
+	var (
+		groupWidth int
+		headerIdx  int
+	)
+
 	for column := 0; column < columnCount; column++ {
 		var maxFieldLength int
 		for row := range rows {
@@ -44,6 +50,7 @@ func computeDimensions(headers []string, rows [][]string, headerToColumnRatio []
 				maxFieldLength = len(rows[row][column])
 			}
 		}
+
 		columnWidths = append(columnWidths, maxFieldLength)
 
 		groupWidth += maxFieldLength + 1
@@ -54,10 +61,12 @@ func computeDimensions(headers []string, rows [][]string, headerToColumnRatio []
 				columnGroup := columnWidths[delineations[headerIdx]+1 : delineations[headerIdx+1]+1]
 				splitRemainerAcrossColumns(headerWidths[headerIdx]-groupWidth+1, columnGroup)
 			}
+
 			groupWidth = 0
 			headerIdx++
 		}
 	}
+
 	return headerWidths, columnWidths, nil
 }
 
@@ -65,17 +74,21 @@ func validateMatrix(headers []string, rows [][]string, headerToColumnRatio []int
 	if len(headers) != len(headerToColumnRatio) {
 		return 0, nil, fmt.Errorf("malformed content: got %d headers for but %d header-to-column ratios", len(headers), len(headerToColumnRatio))
 	}
+
 	delineations := []int{-1}
-	var expectedColumnCount int
+	expectedColumnCount := 0
+
 	for _, ratio := range headerToColumnRatio {
 		expectedColumnCount += ratio
 		delineations = append(delineations, expectedColumnCount-1)
 	}
+
 	for idx := range rows {
 		if len(rows[idx]) != expectedColumnCount {
 			return 0, nil, fmt.Errorf("malformed content: row %d has %d fields instead of the expected %d", idx, len(rows[idx]), expectedColumnCount)
 		}
 	}
+
 	return expectedColumnCount, delineations, nil
 }
 
@@ -84,10 +97,11 @@ func splitRemainerAcrossColumns(remainder int, columns []int) {
 		return
 	}
 
+	currIdx := 0
 	wrappedColumns := newIndexedColumns(columns)
+
 	sort.Stable(sortedIntSlice{indexedIntSlice: wrappedColumns})
 
-	var currIdx int
 	for remainder > 0 {
 		wrappedColumns.content[currIdx]++
 		remainder--
@@ -102,14 +116,19 @@ func splitRemainerAcrossColumns(remainder int, columns []int) {
 }
 
 func computeTemplates(headerWidths []int, columnWidths []int) (string, string) {
-	var headerTemplate string
+	var (
+		headerTemplate string
+		rowTemplate    string
+	)
+
 	for _, width := range headerWidths {
 		headerTemplate += fmt.Sprintf("%%-%ds ", width)
 	}
-	var rowTemplate string
+
 	for _, width := range columnWidths {
 		rowTemplate += fmt.Sprintf("%%-%ds ", width)
 	}
+
 	return headerTemplate, rowTemplate
 }
 
@@ -118,12 +137,13 @@ func printRow(template string, rowData []string) string {
 	for idx := range rowData {
 		data = append(data, rowData[idx])
 	}
+
 	return fmt.Sprintf(template, data...)
 }
 
 // `indexedIntSlice` is a wrapper struct that allows to sort a slice of integers while keeping track
 // of their original ordering and reordering the slice back to the original order respectively via
-// the meta-wrappers `orderedColumns` and `orderedColumns`.
+// the meta-wrappers `sortedIntSlice` and `orderedIntSlice`.
 type indexedIntSlice struct {
 	content []int
 	indices []int
@@ -134,6 +154,7 @@ func newIndexedColumns(content []int) indexedIntSlice {
 	for idx := range content {
 		indices[idx] = idx
 	}
+
 	return indexedIntSlice{
 		content: content,
 		indices: indices,

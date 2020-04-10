@@ -50,15 +50,18 @@ func (l *linter) lint(project *Project) error {
 		}
 
 		l.logger.Debugf("Spreading lint effort for '%s' over sub-directories.", current.Path)
+
 		if current.hasFiles(false) {
 			if _, err = l.runLinter(project, cliArgs, current.Path); err != nil {
 				return err
 			}
 		}
+
 		for _, subDir := range current.SubDirectories {
 			todo = append(todo, subDir)
 		}
 	}
+
 	return nil
 }
 
@@ -89,13 +92,16 @@ func (l *linter) runLinter(project *Project, cliArgs []string, path string) (boo
 				project.linters = append(project.linters, linter.Name)
 			}
 		}
+
 		sort.Strings(project.linters)
 	}
 
 	l.logger.Debugf("Registering issues found on '%s'.", path)
+
 	for _, issue := range lintOutput.Issues {
 		project.addIssue(l.logger, issue)
 	}
+
 	return false, nil
 }
 
@@ -111,5 +117,6 @@ func (l *linter) runManagedLinter(project *Project, cliArgs []string) ([]byte, b
 		l.logger.WithError(err).Errorf("Linter exited with an error. Output was:\n%s Error was:\n%s", stdout.Bytes(), stderr.String())
 		return nil, false, err
 	}
+
 	return stdout.Bytes(), interrupted, nil
 }

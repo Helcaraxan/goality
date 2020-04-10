@@ -31,6 +31,7 @@ func Parse(logger *logrus.Logger, path string, opts ...*LintOpts) (*Project, err
 		logger = logrus.New()
 		logger.SetOutput(ioutil.Discard)
 	}
+
 	opt, err := aggregateLintOpts(opts...)
 	if err != nil {
 		return nil, err
@@ -45,6 +46,7 @@ func Parse(logger *logrus.Logger, path string, opts ...*LintOpts) (*Project, err
 	}
 
 	logger.Infof("Parsing project at path %q.", path)
+
 	project, err := parser.parse(path)
 	if err != nil {
 		return nil, err
@@ -54,10 +56,13 @@ func Parse(logger *logrus.Logger, path string, opts ...*LintOpts) (*Project, err
 		logger: logger,
 		opts:   opt,
 	}
+
 	logger.Infof("Linting project at path %q.", path)
+
 	if err = linter.lint(project); err != nil {
 		return nil, err
 	}
+
 	return project, nil
 }
 
@@ -86,6 +91,7 @@ func WithExcludeDirs(dirsToExclude ...string) *LintOpts {
 	for idx := range dirsToExclude {
 		lintOpts.excludeDirs[dirsToExclude[idx]] = struct{}{}
 	}
+
 	return lintOpts
 }
 
@@ -96,21 +102,27 @@ func (o *LintOpts) mergeLintOpts(optsToMerge *LintOpts) error {
 		o.configPath = optsToMerge.configPath
 	}
 
-	var lastLinter string
-	var newLinters []string
+	var (
+		lastLinter string
+		newLinters []string
+	)
+
 	o.linters = append(o.linters, optsToMerge.linters...)
 	sort.Strings(o.linters)
+
 	for idx := range o.linters {
 		if o.linters[idx] != lastLinter {
 			newLinters = append(newLinters, o.linters[idx])
 			lastLinter = o.linters[idx]
 		}
 	}
+
 	o.linters = newLinters
 
 	for excludeDir := range optsToMerge.excludeDirs {
 		o.excludeDirs[excludeDir] = struct{}{}
 	}
+
 	return nil
 }
 
@@ -119,6 +131,7 @@ func aggregateLintOpts(opts ...*LintOpts) (*LintOpts, error) {
 	for idx := range defaultExcludeDirs {
 		accumulator.excludeDirs[defaultExcludeDirs[idx]] = struct{}{}
 	}
+
 	for idx := range opts {
 		if err := accumulator.mergeLintOpts(opts[idx]); err != nil {
 			return nil, err
@@ -132,6 +145,7 @@ func aggregateLintOpts(opts ...*LintOpts) (*LintOpts, error) {
 
 		parsedConfig := config.Config{}
 		configReader := config.NewFileReader(&parsedConfig, &fakeConfig, fakeLogger)
+
 		if err := configReader.Read(); err != nil {
 			return nil, fmt.Errorf("failed to read or parse config from '%s': %v", accumulator.configPath, err)
 		}
@@ -140,6 +154,7 @@ func aggregateLintOpts(opts ...*LintOpts) (*LintOpts, error) {
 			accumulator.excludeDirs[excludeDir] = struct{}{}
 		}
 	}
+
 	return accumulator, nil
 }
 
@@ -160,9 +175,11 @@ func (o *LintOpts) toArgs() []string {
 		for excludeDir := range o.excludeDirs {
 			excludeList = append(excludeList, excludeDir)
 		}
+
 		sort.Strings(excludeList)
 		args = append(args, "--skip-dirs="+strings.Join(excludeList, ","))
 	}
+
 	return args
 }
 
@@ -178,6 +195,7 @@ func (p *parser) parse(path string) (*Project, error) {
 			p.logger.WithError(err).Error("Could not determine the current working directory.")
 			return nil, err
 		}
+
 		path = filepath.Join(cwd, path)
 	}
 
@@ -186,10 +204,12 @@ func (p *parser) parse(path string) (*Project, error) {
 		p.logger.WithError(err).Errorf("Could not determine the current working directory.")
 		return nil, err
 	}
+
 	if err = os.Chdir(path); err != nil {
 		p.logger.WithError(err).Errorf("Could not move to the project's root directory.")
 		return nil, err
 	}
+
 	defer func() {
 		if moveErr := os.Chdir(cwd); moveErr != nil {
 			p.logger.WithError(err).Errorf("Failed to move back to the original working directory %q.", cwd)
@@ -200,6 +220,7 @@ func (p *parser) parse(path string) (*Project, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &Project{
 		Path: path,
 		root: root,
@@ -212,6 +233,7 @@ func (p *parser) parseDirectory(path string) (*Directory, error) {
 		p.logger.WithError(err).Errorf("Could not open project directory %q.", path)
 		return nil, err
 	}
+
 	defer func() { _ = dir.Close() }()
 
 	dirContents, err := dir.Readdir(-1)
@@ -225,6 +247,7 @@ func (p *parser) parseDirectory(path string) (*Directory, error) {
 		SubDirectories: map[string]*Directory{},
 		Files:          map[string]*File{},
 	}
+
 	for _, dirContent := range dirContents {
 		if dirContent.IsDir() {
 			if _, ok := p.opts.excludeDirs[dirContent.Name()]; ok {
@@ -235,6 +258,7 @@ func (p *parser) parseDirectory(path string) (*Directory, error) {
 			if dirErr != nil {
 				return nil, dirErr
 			}
+
 			directory.SubDirectories[dirContent.Name()] = subDir
 		} else if strings.HasSuffix(dirContent.Name(), ".go") {
 			file, fileErr := p.parseFile(filepath.Join(path, dirContent.Name()))
@@ -244,6 +268,7 @@ func (p *parser) parseDirectory(path string) (*Directory, error) {
 			directory.Files[dirContent.Name()] = file
 		}
 	}
+
 	return directory, nil
 }
 
@@ -253,6 +278,7 @@ func (p *parser) parseFile(path string) (*File, error) {
 		p.logger.WithError(err).Errorf("Failed to open project file %q.", path)
 		return nil, err
 	}
+
 	defer func() { _ = file.Close() }()
 
 	locCount, err := locCounter(file)
@@ -273,8 +299,11 @@ var locCounterBufferSize = 32 * 1024
 func locCounter(r io.Reader) (int, error) {
 	buffer := make([]byte, locCounterBufferSize)
 
-	var line string
-	count := 0
+	var (
+		line  string
+		count int
+	)
+
 	for {
 		n, err := r.Read(buffer)
 		if err != nil && err != io.EOF {
@@ -293,6 +322,7 @@ func locCounter(r io.Reader) (int, error) {
 			if line != "" && !strings.HasPrefix(line, "//") {
 				count++
 			}
+
 			line = ""
 			idx += newIdx + 1
 		}
