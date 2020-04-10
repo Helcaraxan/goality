@@ -22,12 +22,12 @@ func Test_PrintView(t *testing.T) {
 
 	expectedOutput := fmt.Sprintf(`Quality report for Go codebase located at '%s'
 
-path           deadcode   typecheck unused   
-.              0 (0.00)   0  (0.00) 0 (0.00) 
-bar            1 (250.00) 0  (0.00) 0 (0.00) 
-foo            0 (0.00)   0  (0.00) 0 (0.00) 
-foo/dir/...    1 (90.91)  0  (0.00) 0 (0.00) 
-foo/non-go/... 0 (0.00)   0  (0.00) 0 (0.00) 
+path           typecheck unused     
+.              0  (0.00) 0 (0.00)   
+bar            0  (0.00) 1 (250.00) 
+foo            0  (0.00) 0 (0.00)   
+foo/dir/...    0  (0.00) 1 (90.91)  
+foo/non-go/... 0  (0.00) 0 (0.00)   
 
 Data-format: total-issues (average issues per 1K LoC)
 `, project.Path)
@@ -42,8 +42,8 @@ Data-format: total-issues (average issues per 1K LoC)
 func Test_PrintCategories(t *testing.T) {
 	project := testProject(t)
 
-	expectedOutput := `occurrences linter   issue                
-2           deadcode <identif....s unused 
+	expectedOutput := `occurrences linter issue                
+2           unused func  <i....s unused 
 `
 
 	maxIssueTextWidth = 20
@@ -74,7 +74,7 @@ func testProject(t *testing.T) *report.Project {
 		cachedProject, err = report.Parse(
 			logger,
 			testProjectPath,
-			report.WithLinters("deadcode", "unused", "typecheck"),
+			report.WithLinters("unused", "typecheck"),
 			report.WithExcludeDirs("my_exclude"),
 		)
 		require.NoError(t, err)

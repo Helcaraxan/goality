@@ -1,6 +1,7 @@
 .vscode/
 
 # Artifacts that are produced by the test script.
+bin/
 c.out
 goality_darwin
 goality_linux

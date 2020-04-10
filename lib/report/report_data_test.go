@@ -11,14 +11,20 @@ import (
 var (
 	barUnusedIssue = &result.Issue{
 		FromLinter: "unused",
-		Text:       "U1000: func `unusedFunc` is unused",
+		Text:       "func `unusedFunc` is unused",
 		Pos: token.Position{
 			Filename: "bar/file.go",
 			Offset:   18,
 			Line:     3,
 			Column:   6,
 		},
-		SourceLines: []string{"func unusedFunc() (err error) {"},
+		Replacement: &result.Replacement{
+			NeedOnlyDelete: true,
+		},
+		LineRange: &result.Range{
+			From: 3,
+			To:   0,
+		},
 	}
 	fooDirGoVetIssue = &result.Issue{
 		FromLinter: "govet",
@@ -33,14 +39,20 @@ var (
 	}
 	fooDirUnusedIssue = &result.Issue{
 		FromLinter: "unused",
-		Text:       "U1000: func `unworthy` is unused",
+		Text:       "func `unworthy` is unused",
 		Pos: token.Position{
 			Filename: "foo/dir/file.go",
 			Offset:   187,
 			Line:     14,
 			Column:   6,
 		},
-		SourceLines: []string{"func unworthy() {}"},
+		Replacement: &result.Replacement{
+			NeedOnlyDelete: true,
+		},
+		LineRange: &result.Range{
+			From: 14,
+			To:   0,
+		},
 	}
 	rootGoVetIssue = &result.Issue{
 		FromLinter: "govet",
