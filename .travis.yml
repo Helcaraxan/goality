@@ -28,12 +28,12 @@ jobs:
   include:
     # Perform linting before running any tests.
     - stage: lint
-      go: 1.12.x
+      go: 1.14.x
       script: ./ci/lint.sh
 
     # Test on the latest stable Go version.
     - stage: test
-      go: 1.12.x
+      go: 1.14.x
       script: ./ci/test.sh
       before_script:
         # Retrieve and prepare CodeClimate's test coverage reporter.

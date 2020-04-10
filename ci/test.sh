@@ -8,7 +8,7 @@ if [[ "$(uname -s)" != "Linux" && "$(uname -s)" != "Darwin" ]]; then
 fi
 
 # Ensure 'golangci-lint' is available with the expected version on the PATH.
-GOLANGCI_VERSION="${GOLANGCI_VERSION:="1.17.1"}"
+GOLANGCI_VERSION="${GOLANGCI_VERSION:="1.24.0"}"
 if [[ -z ${GOLANGCI_VERSION} ]]; then
 	echo "Please specify the 'golangci-lint' version that should be used via the 'GOLANGCI_VERSION' environment variable."
 	exit 1
