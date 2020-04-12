@@ -22,12 +22,12 @@ func Test_PrintView(t *testing.T) {
 
 	expectedOutput := fmt.Sprintf(`Quality report for Go codebase located at '%s'
 
-path           typecheck unused     
-.              0  (0.00) 0 (0.00)   
-bar            0  (0.00) 1 (250.00) 
-foo            0  (0.00) 0 (0.00)   
-foo/dir/...    0  (0.00) 1 (90.91)  
-foo/non-go/... 0  (0.00) 0 (0.00)   
+path           LoC typecheck unused     
+.              32  0  (0.00) 0 (0.00)   
+bar            4   0  (0.00) 1 (250.00) 
+foo            0   0  (0.00) 0 (0.00)   
+foo/dir/...    11  0  (0.00) 1 (90.91)  
+foo/non-go/... 0   0  (0.00) 0 (0.00)   
 
 Data-format: total-issues (average issues per 1K LoC)
 `, project.Path)

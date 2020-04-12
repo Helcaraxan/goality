@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/Helcaraxan/goality/lib/printer/formatters"
@@ -43,12 +44,12 @@ func PrintView(w io.Writer, view *report.View, format FormatType) error {
 		return subViewList[i] < subViewList[j]
 	})
 
-	ratios := []int{1}
+	ratios := []int{1, 1}
 	for i := 0; i < len(view.Linters); i++ {
 		ratios = append(ratios, 2)
 	}
 
-	headers := append([]string{"path"}, view.Linters...)
+	headers := append([]string{"path", "LoC"}, view.Linters...)
 
 	resultMatrix := [][]string{}
 	for _, subViewPath := range subViewList {
@@ -86,7 +87,7 @@ func PrintView(w io.Writer, view *report.View, format FormatType) error {
 }
 
 func getSubViewLine(subView *report.SubView, linters []string) []string {
-	results := []string{subView.Path}
+	results := []string{subView.Path, strconv.Itoa(subView.LineCount)}
 
 	for _, linter := range linters {
 		issueCount := len(subView.Issues[linter])
