@@ -61,10 +61,13 @@ type runArgs struct {
 	linters      []string
 	depth        int
 	paths        []string
+	format       printer.FormatType
 }
 
 func initRunCommand(commonArgs *commonArgs) *cobra.Command {
 	cArgs := &runArgs{commonArgs: commonArgs}
+
+	var formatValue string
 
 	cmd := &cobra.Command{
 		Use:   "run [path]",
@@ -77,6 +80,18 @@ Example:
   goality run src/github.com/me/project
 `,
 		Args: cobra.MaximumNArgs(1),
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			switch formatValue {
+			case "csv":
+				cArgs.format = printer.FormatTypeCSV
+			case "screen":
+				cArgs.format = printer.FormatTypeScreen
+			default:
+				return fmt.Errorf("unknown result output format %q", cArgs.format)
+			}
+
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				args = append(args, ".")
@@ -92,6 +107,7 @@ Example:
 	cmd.Flags().StringSliceVarP(&cArgs.linters, "linters", "l", nil, "Specific linters to run.")
 	cmd.Flags().IntVarP(&cArgs.depth, "depth", "d", -1, "Path granularity at which to perform the quality analysis.")
 	cmd.Flags().StringSliceVarP(&cArgs.paths, "paths", "p", nil, "Specific paths for which to provide aggregate quality analysis results.")
+	cmd.Flags().StringVarP(&formatValue, "format", "f", "screen", "Format to use when printing the results.")
 
 	return cmd
 }
@@ -135,5 +151,5 @@ func executeRunCommand(args *runArgs) error {
 		return err
 	}
 
-	return printer.PrintView(os.Stdout, project.GenerateView(report.WithDepth(args.depth), report.WithPaths(args.paths...)))
+	return printer.PrintView(os.Stdout, project.GenerateView(report.WithDepth(args.depth), report.WithPaths(args.paths...)), args.format)
 }

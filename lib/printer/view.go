@@ -1,16 +1,30 @@
 package printer
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"sort"
 	"strings"
 
+	"github.com/Helcaraxan/goality/lib/printer/formatters"
 	"github.com/Helcaraxan/goality/lib/report"
 )
 
-func PrintView(w io.Writer, view *report.View) error {
+type FormatType uint8
+
+const (
+	FormatTypeUnknown = iota
+	FormatTypeScreen
+	FormatTypeCSV
+)
+
+type Formatter interface {
+	PrintTable(io.Writer, []string, [][]string, []int) error
+}
+
+func PrintView(w io.Writer, view *report.View, format FormatType) error {
 	if len(view.SubViews) == 0 {
 		return nil
 	}
@@ -41,15 +55,34 @@ func PrintView(w io.Writer, view *report.View) error {
 		resultMatrix = append(resultMatrix, getSubViewLine(view.SubViews[subViewPath], view.Linters))
 	}
 
-	if _, err := fmt.Fprintf(w, "Quality report for Go codebase located at '%s'\n\n", view.Path); err != nil {
-		return err
-	} else if err := printTable(w, headers, resultMatrix, ratios); err != nil {
+	var formatter Formatter
+
+	switch format {
+	case FormatTypeUnknown:
+		return errors.New("unknown format type specified for result printing")
+	case FormatTypeCSV:
+		formatter = &formatters.CSVFormatter{}
+	case FormatTypeScreen:
+		if _, err := fmt.Fprintf(w, "Quality report for Go codebase located at '%s'\n\n", view.Path); err != nil {
+			return err
+		}
+
+		formatter = &formatters.ScreenFormatter{}
+	}
+
+	if err := formatter.PrintTable(w, headers, resultMatrix, ratios); err != nil {
 		return err
 	}
 
-	_, err := fmt.Fprint(w, "\nData-format: total-issues (average issues per 1K LoC)\n")
+	switch format {
+	case FormatTypeScreen:
+		if _, err := fmt.Fprint(w, "\nData-format: total-issues (average issues per 1K LoC)\n"); err != nil {
+			return err
+		}
+	default: // Nothing.
+	}
 
-	return err
+	return nil
 }
 
 func getSubViewLine(subView *report.SubView, linters []string) []string {

@@ -1,4 +1,4 @@
-package printer
+package formatters
 
 import (
 	"testing"
@@ -64,7 +64,9 @@ func Test_ValidateMatrix(t *testing.T) {
 	for name := range testcases {
 		testcase := testcases[name]
 		t.Run(name, func(t *testing.T) {
-			columnCount, delineations, err := validateMatrix(testcase.headers, testcase.rows, testcase.ratios)
+			f := ScreenFormatter{}
+			columnCount, delineations, err := f.validateMatrix(testcase.headers, testcase.rows, testcase.ratios)
+
 			if !testcase.valid {
 				assert.Error(t, err)
 			} else {
@@ -112,7 +114,9 @@ func Test_SplitRemainderAcrossColumns(t *testing.T) {
 	for name := range testcases {
 		testcase := testcases[name]
 		t.Run(name, func(t *testing.T) {
-			splitRemainerAcrossColumns(testcase.remainder, testcase.columns)
+			f := ScreenFormatter{}
+
+			f.splitRemainerAcrossColumns(testcase.remainder, testcase.columns)
 			assert.Equal(t, testcase.expectedColumns, testcase.columns)
 		})
 	}
@@ -189,7 +193,9 @@ func Test_ComputeDimensions(t *testing.T) {
 	for name := range testcases {
 		testcase := testcases[name]
 		t.Run(name, func(t *testing.T) {
-			hWidths, cWidths, err := computeDimensions(testcase.headers, testcase.matrix, testcase.ratios)
+			f := ScreenFormatter{}
+			hWidths, cWidths, err := f.computeDimensions(testcase.headers, testcase.matrix, testcase.ratios)
+
 			require.NoError(t, err)
 			assert.Equal(t, testcase.expectedColumnWidths, cWidths)
 			assert.Equal(t, testcase.expectedHeaderWidths, hWidths)

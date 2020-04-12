@@ -1,4 +1,4 @@
-package printer
+package formatters
 
 import (
 	"fmt"
@@ -7,17 +7,19 @@ import (
 	"strings"
 )
 
-func printTable(w io.Writer, headers []string, rows [][]string, headerToColumnRatios []int) error {
-	headerWidths, columnWidths, err := computeDimensions(headers, rows, headerToColumnRatios)
+type ScreenFormatter struct{}
+
+func (f *ScreenFormatter) PrintTable(w io.Writer, headers []string, rows [][]string, headerToColumnRatios []int) error {
+	headerWidths, columnWidths, err := f.computeDimensions(headers, rows, headerToColumnRatios)
 	if err != nil {
 		return err
 	}
 
-	headerTemplate, rowTemplate := computeTemplates(headerWidths, columnWidths)
+	headerTemplate, rowTemplate := f.computeTemplates(headerWidths, columnWidths)
 
-	output := []string{printRow(headerTemplate, headers)}
+	output := []string{f.printRow(headerTemplate, headers)}
 	for idx := range rows {
-		output = append(output, printRow(rowTemplate, rows[idx]))
+		output = append(output, f.printRow(rowTemplate, rows[idx]))
 	}
 
 	_, err = fmt.Fprintln(w, strings.Join(output, "\n"))
@@ -25,8 +27,8 @@ func printTable(w io.Writer, headers []string, rows [][]string, headerToColumnRa
 	return err
 }
 
-func computeDimensions(headers []string, rows [][]string, headerToColumnRatio []int) ([]int, []int, error) {
-	columnCount, delineations, err := validateMatrix(headers, rows, headerToColumnRatio)
+func (f *ScreenFormatter) computeDimensions(headers []string, rows [][]string, headerToColumnRatio []int) ([]int, []int, error) {
+	columnCount, delineations, err := f.validateMatrix(headers, rows, headerToColumnRatio)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -59,7 +61,7 @@ func computeDimensions(headers []string, rows [][]string, headerToColumnRatio []
 				headerWidths[headerIdx] += groupWidth - 1 - headerWidths[headerIdx]
 			} else if headerWidths[headerIdx] > groupWidth-1 {
 				columnGroup := columnWidths[delineations[headerIdx]+1 : delineations[headerIdx+1]+1]
-				splitRemainerAcrossColumns(headerWidths[headerIdx]-groupWidth+1, columnGroup)
+				f.splitRemainerAcrossColumns(headerWidths[headerIdx]-groupWidth+1, columnGroup)
 			}
 
 			groupWidth = 0
@@ -70,7 +72,7 @@ func computeDimensions(headers []string, rows [][]string, headerToColumnRatio []
 	return headerWidths, columnWidths, nil
 }
 
-func validateMatrix(headers []string, rows [][]string, headerToColumnRatio []int) (int, []int, error) {
+func (f *ScreenFormatter) validateMatrix(headers []string, rows [][]string, headerToColumnRatio []int) (int, []int, error) {
 	if len(headers) != len(headerToColumnRatio) {
 		return 0, nil, fmt.Errorf("malformed content: got %d headers for but %d header-to-column ratios", len(headers), len(headerToColumnRatio))
 	}
@@ -92,7 +94,7 @@ func validateMatrix(headers []string, rows [][]string, headerToColumnRatio []int
 	return expectedColumnCount, delineations, nil
 }
 
-func splitRemainerAcrossColumns(remainder int, columns []int) {
+func (f *ScreenFormatter) splitRemainerAcrossColumns(remainder int, columns []int) {
 	if remainder <= 0 {
 		return
 	}
@@ -115,7 +117,7 @@ func splitRemainerAcrossColumns(remainder int, columns []int) {
 	sort.Stable(orderedIntSlice{indexedIntSlice: wrappedColumns})
 }
 
-func computeTemplates(headerWidths []int, columnWidths []int) (string, string) {
+func (f *ScreenFormatter) computeTemplates(headerWidths []int, columnWidths []int) (string, string) {
 	var (
 		headerTemplate string
 		rowTemplate    string
@@ -132,7 +134,7 @@ func computeTemplates(headerWidths []int, columnWidths []int) (string, string) {
 	return headerTemplate, rowTemplate
 }
 
-func printRow(template string, rowData []string) string {
+func (f *ScreenFormatter) printRow(template string, rowData []string) string {
 	data := []interface{}{}
 	for idx := range rowData {
 		data = append(data, rowData[idx])

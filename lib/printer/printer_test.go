@@ -35,7 +35,7 @@ Data-format: total-issues (average issues per 1K LoC)
 	view := project.GenerateView(report.WithDepth(2))
 
 	w := &strings.Builder{}
-	require.NoError(t, PrintView(w, view))
+	require.NoError(t, PrintView(w, view, FormatTypeScreen))
 	assert.Equal(t, expectedOutput, w.String())
 }
 
@@ -50,7 +50,7 @@ func Test_PrintCategories(t *testing.T) {
 	categories := analysis.IssueRanking(project.GenerateView(), 0)
 
 	w := &strings.Builder{}
-	require.NoError(t, PrintCategories(w, categories))
+	require.NoError(t, PrintCategories(w, categories, FormatTypeScreen))
 	assert.Equal(t, expectedOutput, w.String())
 }
 
